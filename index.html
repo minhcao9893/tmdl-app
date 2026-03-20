@@ -193,7 +193,7 @@ tr:hover td{background:#f8fbff}
 <div class="hdr">
   <div class="hdr-left">
     <h1>⚡ TMDL Doc Studio</h1>
-    <span class="hdr-badge">v3.1 · 2503211045</span>
+    <span class="hdr-badge">v3.1 · 2503211420</span>
   </div>
   <div class="hdr-right">
     <div class="pat-status">
@@ -685,7 +685,7 @@ async function loadVersions() {
 
   if (!files.length) { list.innerHTML = '<div class="ver-empty">Không tìm thấy version nào.</div>'; return; }
 
-  // Store file sha map for delete
+  // Store ALL file shas (both xlsx and meta.json) for delete
   window._versionShaMap = {};
   items.forEach(i => { window._versionShaMap[i.name] = i.sha; });
 
@@ -744,7 +744,7 @@ async function downloadVersion(topic, report, filename, btn) {
 
 async function deleteVersion(topic, report, filename, rowIdx) {
   const ts = tsFromFilename(filename);
-  const confirmed = confirm(`Xóa version này?\n\n📄 ${filename}\n📅 ${ts}\n\nLưu ý: hành động này không thể hoàn tác trên GitHub.\nFile meta JSON tương ứng cũng sẽ bị xóa.`);
+  const confirmed = confirm(`Xóa version này?\n\n📄 ${filename}\n📅 ${ts}\n\nHành động này không thể hoàn tác.`);
   if (!confirmed) return;
 
   const btn = event.target;
@@ -754,7 +754,7 @@ async function deleteVersion(topic, report, filename, rowIdx) {
     // Delete xlsx
     const xlsxPath = `docs/${topic}/${report}/${filename}`;
     const xlsxSha = window._versionShaMap?.[filename];
-    if (!xlsxSha) throw new Error('Không tìm thấy SHA của file. Thử làm mới trang.');
+    if (!xlsxSha) throw new Error('Không tìm thấy SHA. Thử làm mới danh sách.');
     await ghDelete(CFG.appRepo, xlsxPath, xlsxSha, `Delete version: ${filename}`);
 
     // Delete meta json (ignore error if not exists)
@@ -764,14 +764,39 @@ async function deleteVersion(topic, report, filename, rowIdx) {
       await ghDelete(CFG.appRepo, `docs/${topic}/${report}/${metaName}`, metaSha, `Delete meta: ${metaName}`).catch(()=>{});
     }
 
-    // Remove row from UI
+    // Remove row from DOM immediately — no reload needed
     const row = document.getElementById(`ver-row-${rowIdx}`);
     if (row) {
-      row.style.transition = 'opacity .3s, max-height .3s';
+      row.style.transition = 'opacity .25s, transform .25s';
       row.style.opacity = '0';
-      row.style.maxHeight = '0';
-      row.style.overflow = 'hidden';
-      setTimeout(() => { row.remove(); loadVersions(); }, 350);
+      row.style.transform = 'translateX(20px)';
+      setTimeout(() => {
+        row.remove();
+        // Update remaining badges (re-number versions)
+        const remaining = document.querySelectorAll('.ver-item');
+        const total = remaining.length;
+        remaining.forEach((el, i) => {
+          const badge = el.querySelector('.ver-badge');
+          if (!badge) return;
+          if (i === 0) {
+            badge.textContent = 'LATEST';
+            badge.className = 'ver-badge latest';
+            el.classList.add('latest');
+          } else {
+            badge.textContent = 'v' + (total - i);
+            badge.className = 'ver-badge';
+            el.classList.remove('latest');
+          }
+        });
+        // If only 1 left, disable its delete button
+        if (total === 1) {
+          const lastDel = document.querySelector('.btn-ver-del');
+          if (lastDel) { lastDel.style.opacity='.3'; lastDel.style.cursor='not-allowed'; lastDel.onclick=null; }
+        }
+        if (total === 0) {
+          document.getElementById('verList').innerHTML = '<div class="ver-empty">Không còn version nào.</div>';
+        }
+      }, 280);
     }
   } catch(e) {
     alert('Lỗi xóa: ' + e.message);
@@ -802,8 +827,11 @@ async function refreshFolders() {
 // FILENAME HELPERS
 // ════════════════════════════════════════════
 function makeTimestamp() {
-  const d = new Date(), pad = n=>String(n).padStart(2,'0');
-  return `${String(d.getFullYear()).slice(2)}${pad(d.getMonth()+1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+  // GMT+7 Vietnam time
+  const now = new Date();
+  const vn = new Date(now.getTime() + 7*60*60*1000);
+  const pad = n=>String(n).padStart(2,'0');
+  return `${String(vn.getUTCFullYear()).slice(2)}${pad(vn.getUTCMonth()+1)}${pad(vn.getUTCDate())}${pad(vn.getUTCHours())}${pad(vn.getUTCMinutes())}${pad(vn.getUTCSeconds())}`;
 }
 
 function tsFromFilename(filename) {
