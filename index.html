@@ -185,6 +185,19 @@ tr:hover td{background:#f8fbff}
 .live-stat .ls-label{font-size:10px;color:var(--text3);margin-top:2px;text-transform:uppercase;letter-spacing:.4px}
 .live-stat .ls-sub{font-size:9px;color:var(--text3);margin-top:1px}
 .live-phase{font-size:12px;color:var(--text2);margin-top:8px;min-height:18px;font-style:italic}
+/* ── Optimistic UI — Toast notifications ── */
+.toast-wrap{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:8px;pointer-events:none}
+.toast{padding:10px 16px;border-radius:10px;font-size:13px;font-weight:500;color:#fff;max-width:320px;pointer-events:auto;animation:toast-in .2s ease;box-shadow:0 4px 16px rgba(0,0,0,.18)}
+@keyframes toast-in{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
+.toast.ok{background:#0a7c4e}
+.toast.err{background:#c0392b}
+.toast.info{background:#1a2744;display:flex;align-items:center;gap:8px}
+.toast-spinner{width:14px;height:14px;border:2px solid rgba(255,255,255,.3);border-top-color:#fff;border-radius:50%;animation:spin .7s linear infinite;flex-shrink:0}
+@keyframes spin{to{transform:rotate(360deg)}}
+.toast.out{animation:toast-out .3s ease forwards;pointer-events:none}
+@keyframes toast-out{to{opacity:0;transform:translateY(6px)}}
+/* Folder option states */
+.opt-pending{color:#a0aec0;font-style:italic}
 </style>
 </head>
 <body>
@@ -193,7 +206,7 @@ tr:hover td{background:#f8fbff}
 <div class="hdr">
   <div class="hdr-left">
     <h1>⚡ TMDL Doc Studio</h1>
-    <span class="hdr-badge">v3.1 · 2603201720</span>
+    <span class="hdr-badge">v3.1 · 2503211530</span>
   </div>
   <div class="hdr-right">
     <div class="pat-status">
@@ -203,6 +216,8 @@ tr:hover td{background:#f8fbff}
     <button onclick="toggleSetup()" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;padding:5px 12px;border-radius:7px;font-size:12px;cursor:pointer">⚙ Cấu hình</button>
   </div>
 </div>
+
+<div class="toast-wrap" id="toastWrap"></div>
 
 <div class="wrap">
 
@@ -609,6 +624,13 @@ function getNextKey() {
 // ════════════════════════════════════════════
 async function loadAllTopics() {
   if (!CFG.pat || !CFG.user || !CFG.appRepo) return;
+  // Show loading state in selects
+  ['newTopic','updTopic','dlTopic'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (sel && sel.options.length <= 1) {
+      sel.innerHTML = '<option value="">⏳ Đang tải...</option>';
+    }
+  });
   const items = await ghListDir(CFG.appRepo, 'docs');
   const topics = items.filter(i=>i.type==='dir').map(i=>i.name).sort();
   ['newTopic','updTopic','dlTopic'].forEach(id => {
@@ -625,10 +647,11 @@ async function loadReportFolders(topicSelId, reportSelId) {
   const topic = document.getElementById(topicSelId)?.value;
   const repSel = document.getElementById(reportSelId);
   if (!repSel) return;
-  repSel.innerHTML = '<option value="">-- Chọn báo cáo --</option>';
-  if (!topic) return;
+  repSel.innerHTML = '<option value="">⏳ Đang tải...</option>';
+  if (!topic) { repSel.innerHTML = '<option value="">-- Chọn báo cáo --</option>'; return; }
   const items = await ghListDir(CFG.appRepo, `docs/${topic}`);
   const reports = items.filter(i=>i.type==='dir').map(i=>i.name).sort();
+  repSel.innerHTML = '<option value="">-- Chọn báo cáo --</option>';
   reports.forEach(r => { const o=document.createElement('option'); o.value=r; o.textContent=r; repSel.appendChild(o); });
 }
 
@@ -643,15 +666,82 @@ function toggleNewInput(id) {
   document.getElementById(id)?.classList.toggle('show');
 }
 
+// ════════════════════════════════════════════
+// TOAST NOTIFICATIONS
+// ════════════════════════════════════════════
+let _toastId = 0;
+function toast(msg, type='info', duration=3000) {
+  const wrap = document.getElementById('toastWrap');
+  const el = document.createElement('div');
+  const id = ++_toastId;
+  el.className = `toast ${type}`;
+  el.id = `toast-${id}`;
+  el.innerHTML = type==='info'
+    ? `<div class="toast-spinner"></div>${msg}`
+    : msg;
+  wrap.appendChild(el);
+  if (duration > 0) {
+    setTimeout(() => dismissToast(id), duration);
+  }
+  return id;
+}
+function dismissToast(id) {
+  const el = document.getElementById(`toast-${id}`);
+  if (!el) return;
+  el.classList.add('out');
+  setTimeout(() => el.remove(), 320);
+}
+function updateToast(id, msg, type) {
+  const el = document.getElementById(`toast-${id}`);
+  if (!el) return;
+  el.className = `toast ${type}`;
+  el.innerHTML = msg;
+  setTimeout(() => dismissToast(id), 3000);
+}
+
+// ════════════════════════════════════════════
+// FOLDER MANAGEMENT — OPTIMISTIC UI
+// ════════════════════════════════════════════
 async function confirmNewTopic() {
   const name = document.getElementById('newTopicName').value.trim().replace(/[^a-zA-Z0-9_\-]/g,'_');
   if (!name) return alert('Tên folder không hợp lệ');
-  await ghUpload(CFG.appRepo, `docs/${name}/.gitkeep`, '', `Create topic folder: ${name}`);
+
+  // OPTIMISTIC: Add to all dropdowns immediately
+  ['newTopic','updTopic','dlTopic'].forEach(selId => {
+    const sel = document.getElementById(selId);
+    if (!sel) return;
+    // Check if already exists
+    if ([...sel.options].some(o=>o.value===name)) return;
+    const o = document.createElement('option');
+    o.value = name; o.textContent = name;
+    o.className = 'opt-pending'; // gray italic = pending
+    sel.appendChild(o);
+  });
+  document.getElementById('newTopic').value = name;
   document.getElementById('newTopicName').value = '';
   document.getElementById('newTopicInput').classList.remove('show');
-  await loadAllTopics();
-  document.getElementById('newTopic').value = name;
   syncReportFolder();
+
+  // Show loading toast
+  const tid = toast(`Đang tạo folder "${name}"...`, 'info', 0);
+
+  // API call in background
+  try {
+    await ghUpload(CFG.appRepo, `docs/${name}/.gitkeep`, '', `Create topic folder: ${name}`);
+    // Remove pending style
+    ['newTopic','updTopic','dlTopic'].forEach(selId => {
+      const opt = document.querySelector(`#${selId} option[value="${name}"]`);
+      if (opt) opt.className = '';
+    });
+    updateToast(tid, `✓ Đã tạo folder "${name}"`, 'ok');
+  } catch(e) {
+    // ROLLBACK: remove the option if API failed
+    ['newTopic','updTopic','dlTopic'].forEach(selId => {
+      const opt = document.querySelector(`#${selId} option[value="${name}"]`);
+      if (opt) opt.remove();
+    });
+    updateToast(tid, `✗ Lỗi tạo folder: ${e.message}`, 'err');
+  }
 }
 
 async function loadUpdVersions() {
@@ -747,60 +837,75 @@ async function deleteVersion(topic, report, filename, rowIdx) {
   const confirmed = confirm(`Xóa version này?\n\n📄 ${filename}\n📅 ${ts}\n\nHành động này không thể hoàn tác.`);
   if (!confirmed) return;
 
-  const btn = event.target;
-  btn.textContent = '⏳'; btn.disabled = true;
+  const row = document.getElementById(`ver-row-${rowIdx}`);
+  const list = document.getElementById('verList');
+
+  // OPTIMISTIC: remove row from UI immediately
+  let rowHtml = '';
+  if (row) {
+    rowHtml = row.outerHTML; // save for rollback
+    row.style.transition = 'opacity .2s, transform .2s';
+    row.style.opacity = '0';
+    row.style.transform = 'translateX(16px)';
+    setTimeout(() => {
+      row.remove();
+      renumberVersionBadges();
+    }, 220);
+  }
+
+  const tid = toast(`Đang xóa version ${ts}...`, 'info', 0);
 
   try {
     // Delete xlsx
-    const xlsxPath = `docs/${topic}/${report}/${filename}`;
     const xlsxSha = window._versionShaMap?.[filename];
     if (!xlsxSha) throw new Error('Không tìm thấy SHA. Thử làm mới danh sách.');
-    await ghDelete(CFG.appRepo, xlsxPath, xlsxSha, `Delete version: ${filename}`);
+    await ghDelete(CFG.appRepo, `docs/${topic}/${report}/${filename}`, xlsxSha, `Delete: ${filename}`);
 
-    // Delete meta json (ignore error if not exists)
+    // Delete meta json silently
     const metaName = filename.replace('.xlsx', '.meta.json');
     const metaSha  = window._versionShaMap?.[metaName];
     if (metaSha) {
       await ghDelete(CFG.appRepo, `docs/${topic}/${report}/${metaName}`, metaSha, `Delete meta: ${metaName}`).catch(()=>{});
     }
 
-    // Remove row from DOM immediately — no reload needed
-    const row = document.getElementById(`ver-row-${rowIdx}`);
-    if (row) {
-      row.style.transition = 'opacity .25s, transform .25s';
-      row.style.opacity = '0';
-      row.style.transform = 'translateX(20px)';
-      setTimeout(() => {
-        row.remove();
-        // Update remaining badges (re-number versions)
-        const remaining = document.querySelectorAll('.ver-item');
-        const total = remaining.length;
-        remaining.forEach((el, i) => {
-          const badge = el.querySelector('.ver-badge');
-          if (!badge) return;
-          if (i === 0) {
-            badge.textContent = 'LATEST';
-            badge.className = 'ver-badge latest';
-            el.classList.add('latest');
-          } else {
-            badge.textContent = 'v' + (total - i);
-            badge.className = 'ver-badge';
-            el.classList.remove('latest');
-          }
-        });
-        // If only 1 left, disable its delete button
-        if (total === 1) {
-          const lastDel = document.querySelector('.btn-ver-del');
-          if (lastDel) { lastDel.style.opacity='.3'; lastDel.style.cursor='not-allowed'; lastDel.onclick=null; }
-        }
-        if (total === 0) {
-          document.getElementById('verList').innerHTML = '<div class="ver-empty">Không còn version nào.</div>';
-        }
-      }, 280);
+    updateToast(tid, `✓ Đã xóa version ${ts}`, 'ok');
+
+    // If no versions left, show empty state
+    const remaining = document.querySelectorAll('#verList .ver-item');
+    if (remaining.length === 0) {
+      list.innerHTML = '<div class="ver-empty">Không còn version nào.</div>';
     }
+
   } catch(e) {
-    alert('Lỗi xóa: ' + e.message);
-    btn.textContent = '🗑'; btn.disabled = false;
+    // ROLLBACK: restore the row
+    if (rowHtml && row?.parentNode === null) {
+      list.insertAdjacentHTML('afterbegin', rowHtml);
+      const restored = document.getElementById(`ver-row-${rowIdx}`);
+      if (restored) { restored.style.opacity='1'; restored.style.transform='none'; }
+      renumberVersionBadges();
+    }
+    updateToast(tid, `✗ Lỗi xóa: ${e.message}`, 'err');
+  }
+}
+
+function renumberVersionBadges() {
+  const rows = document.querySelectorAll('#verList .ver-item');
+  const total = rows.length;
+  rows.forEach((el, i) => {
+    const badge = el.querySelector('.ver-badge');
+    if (!badge) return;
+    if (i === 0) {
+      badge.textContent = 'LATEST'; badge.className = 'ver-badge latest';
+      el.classList.add('latest');
+    } else {
+      badge.textContent = 'v' + (total - i); badge.className = 'ver-badge';
+      el.classList.remove('latest');
+    }
+  });
+  // Disable delete on last remaining version
+  if (total === 1) {
+    const btn = document.querySelector('#verList .btn-ver-del');
+    if (btn) { btn.style.opacity='.3'; btn.style.cursor='not-allowed'; btn.onclick=null; }
   }
 }
 
