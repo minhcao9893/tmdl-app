@@ -140,6 +140,8 @@ tr:hover td{background:#f8fbff}
 .ver-desc{font-size:12px;color:var(--text2);margin-top:2px}
 .btn-ver-dl{background:var(--navy);color:#fff;border:none;padding:7px 15px;border-radius:7px;font-size:12px;font-weight:600;cursor:pointer;white-space:nowrap}
 .btn-ver-dl:hover{background:var(--blue)}
+.btn-ver-del{background:transparent;border:1.5px solid #fca5a5;color:#c0392b;padding:6px 10px;border-radius:7px;font-size:13px;cursor:pointer;transition:all .15s}
+.btn-ver-del:hover{background:#fee2e2;border-color:#e74c3c}
 .ver-empty{color:var(--text3);font-style:italic;padding:20px;text-align:center;font-size:13px}
 
 /* ── Inventory section ── */
@@ -191,7 +193,7 @@ tr:hover td{background:#f8fbff}
 <div class="hdr">
   <div class="hdr-left">
     <h1>⚡ TMDL Doc Studio</h1>
-    <span class="hdr-badge">v3.1 · Smart Update</span>
+    <span class="hdr-badge">v3.1 · 2503211045</span>
   </div>
   <div class="hdr-right">
     <div class="pat-status">
@@ -683,18 +685,27 @@ async function loadVersions() {
 
   if (!files.length) { list.innerHTML = '<div class="ver-empty">Không tìm thấy version nào.</div>'; return; }
 
+  // Store file sha map for delete
+  window._versionShaMap = {};
+  items.forEach(i => { window._versionShaMap[i.name] = i.sha; });
+
   list.innerHTML = '';
   files.forEach((f, idx) => {
     const isLatest = idx === 0;
+    const canDelete = files.length > 1; // prevent deleting last version
     const div = document.createElement('div');
     div.className = 'ver-item' + (isLatest?' latest':'');
+    div.id = `ver-row-${idx}`;
     div.innerHTML = `
       <span class="ver-badge${isLatest?' latest':''}">${isLatest?'LATEST':'v'+(files.length-idx)}</span>
       <div class="ver-info">
         <div class="ver-date">${tsFromFilename(f.name)}</div>
         <div class="ver-desc" id="vd-${idx}">Đang tải mô tả...</div>
       </div>
-      <button class="btn-ver-dl" onclick="downloadVersion('${topic}','${report}','${f.name}')">⬇ Download</button>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn-ver-dl" onclick="downloadVersion('${topic}','${report}','${f.name}',this)">⬇ Download</button>
+        ${canDelete ? `<button class="btn-ver-del" onclick="deleteVersion('${topic}','${report}','${f.name}',${idx})" title="Xóa version này">🗑</button>` : '<button class="btn-ver-del" style="opacity:.3;cursor:not-allowed" title="Không thể xóa version duy nhất">🗑</button>'}
+      </div>
     `;
     list.appendChild(div);
     loadVersionDesc(topic, report, f.name, `vd-${idx}`);
@@ -715,10 +726,8 @@ async function loadVersionDesc(topic, report, filename, elId) {
 }
 
 // FIX: Download via GitHub API, not raw URL
-async function downloadVersion(topic, report, filename) {
-  const btn = event.target;
-  btn.textContent = '⏳ Đang tải...';
-  btn.disabled = true;
+async function downloadVersion(topic, report, filename, btn) {
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
   try {
     const filePath = `docs/${topic}/${report}/${filename}`;
     const blob = await ghDownloadBinary(CFG.appRepo, filePath);
@@ -729,9 +738,59 @@ async function downloadVersion(topic, report, filename) {
   } catch(e) {
     alert('Lỗi download: ' + e.message);
   } finally {
-    btn.textContent = '⬇ Download';
-    btn.disabled = false;
+    if (btn) { btn.textContent = '⬇ Download'; btn.disabled = false; }
   }
+}
+
+async function deleteVersion(topic, report, filename, rowIdx) {
+  const ts = tsFromFilename(filename);
+  const confirmed = confirm(`Xóa version này?\n\n📄 ${filename}\n📅 ${ts}\n\nLưu ý: hành động này không thể hoàn tác trên GitHub.\nFile meta JSON tương ứng cũng sẽ bị xóa.`);
+  if (!confirmed) return;
+
+  const btn = event.target;
+  btn.textContent = '⏳'; btn.disabled = true;
+
+  try {
+    // Delete xlsx
+    const xlsxPath = `docs/${topic}/${report}/${filename}`;
+    const xlsxSha = window._versionShaMap?.[filename];
+    if (!xlsxSha) throw new Error('Không tìm thấy SHA của file. Thử làm mới trang.');
+    await ghDelete(CFG.appRepo, xlsxPath, xlsxSha, `Delete version: ${filename}`);
+
+    // Delete meta json (ignore error if not exists)
+    const metaName = filename.replace('.xlsx', '.meta.json');
+    const metaSha  = window._versionShaMap?.[metaName];
+    if (metaSha) {
+      await ghDelete(CFG.appRepo, `docs/${topic}/${report}/${metaName}`, metaSha, `Delete meta: ${metaName}`).catch(()=>{});
+    }
+
+    // Remove row from UI
+    const row = document.getElementById(`ver-row-${rowIdx}`);
+    if (row) {
+      row.style.transition = 'opacity .3s, max-height .3s';
+      row.style.opacity = '0';
+      row.style.maxHeight = '0';
+      row.style.overflow = 'hidden';
+      setTimeout(() => { row.remove(); loadVersions(); }, 350);
+    }
+  } catch(e) {
+    alert('Lỗi xóa: ' + e.message);
+    btn.textContent = '🗑'; btn.disabled = false;
+  }
+}
+
+async function ghDelete(repo, path, sha, commitMsg) {
+  const r = await fetch(`${GH_API}/repos/${CFG.user}/${repo}/contents/${path}`, {
+    method: 'DELETE',
+    headers: {
+      Authorization: `token ${CFG.pat}`,
+      Accept: 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ message: commitMsg, sha })
+  });
+  if (!r.ok) { const e=await r.json(); throw new Error(e.message||r.statusText); }
+  return r.json();
 }
 
 async function refreshFolders() {
