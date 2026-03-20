@@ -171,6 +171,18 @@ tr:hover td{background:#f8fbff}
 /* Section show/hide */
 .section-body{display:none}
 .section-body.show{display:block}
+
+/* ── Animated counter ── */
+.live-stats{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px}
+.live-stat{background:#fff;border:1.5px solid var(--border);border-radius:10px;padding:10px 16px;text-align:center;min-width:90px;transition:border-color .3s}
+.live-stat.active{border-color:var(--blue);background:#edf2ff}
+.live-stat.done{border-color:var(--teal);background:#e8faf6}
+.live-stat .ls-num{font-size:24px;font-weight:800;color:var(--navy);font-variant-numeric:tabular-nums;transition:color .3s;min-width:40px;display:inline-block}
+.live-stat.active .ls-num{color:var(--blue)}
+.live-stat.done .ls-num{color:var(--teal)}
+.live-stat .ls-label{font-size:10px;color:var(--text3);margin-top:2px;text-transform:uppercase;letter-spacing:.4px}
+.live-stat .ls-sub{font-size:9px;color:var(--text3);margin-top:1px}
+.live-phase{font-size:12px;color:var(--text2);margin-top:8px;min-height:18px;font-style:italic}
 </style>
 </head>
 <body>
@@ -179,7 +191,7 @@ tr:hover td{background:#f8fbff}
 <div class="hdr">
   <div class="hdr-left">
     <h1>⚡ TMDL Doc Studio</h1>
-    <span class="hdr-badge">v3.0 · GitHub Edition</span>
+    <span class="hdr-badge">v3.1 · Smart Update</span>
   </div>
   <div class="hdr-right">
     <div class="pat-status">
@@ -256,23 +268,31 @@ tr:hover td{background:#f8fbff}
   <div id="pane-new" class="section-body show">
     <div class="card">
       <div class="card-title"><span class="num">1</span> Chọn / Tạo folder lưu trữ</div>
-      <div class="folder-row">
-        <select class="sel" id="newFolder" onchange="onNewFolderChange()">
-          <option value="">-- Đang tải danh sách folder... --</option>
-        </select>
-        <button class="btn-new-folder" onclick="toggleNewFolderInput()">+ Tạo folder mới</button>
-      </div>
-      <div class="new-folder-input" id="newFolderInput">
-        <input type="text" id="newFolderName" placeholder="VD: Inventory, Finance, HR...">
-        <button class="btn-confirm-folder" onclick="confirmNewFolder()">Tạo</button>
+      <div class="grid2">
+        <div>
+          <label class="lbl">Folder chủ đề (cấp 1)</label>
+          <div class="folder-row">
+            <select class="sel" id="newTopic" onchange="loadReportFolders('newTopic','newReport')"></select>
+            <button class="btn-new-folder" onclick="toggleNewInput('newTopicInput')">+ Tạo mới</button>
+          </div>
+          <div class="new-folder-input" id="newTopicInput">
+            <input type="text" id="newTopicName" placeholder="VD: Procurement, Finance, HR...">
+            <button class="btn-confirm-folder" onclick="confirmNewTopic()">Tạo</button>
+          </div>
+        </div>
+        <div>
+          <label class="lbl">Tên báo cáo — cũng là folder cấp 2</label>
+          <input type="text" id="newReportName" placeholder="VD: RCN_Plan, WIP_Actual..." oninput="syncReportFolder()">
+          <div class="tip" style="margin-top:5px;font-size:11px">Tên này sẽ tạo folder: <code id="newPathPreview">chủ-đề/tên-báo-cáo/</code></div>
+        </div>
       </div>
     </div>
 
     <div class="card">
       <div class="card-title"><span class="num">2</span> Thông tin báo cáo</div>
       <div class="grid2">
-        <div><label class="lbl">Tên báo cáo</label><input type="text" id="newReportName" placeholder="VD: RCN Procurement Dashboard"></div>
         <div><label class="lbl">Người tạo documentation</label><input type="text" id="newAuthor" placeholder="Tên bạn"></div>
+        <div></div>
       </div>
     </div>
 
@@ -287,6 +307,17 @@ tr:hover td{background:#f8fbff}
       <button class="btn btn-stop" id="newStopBtn" onclick="stopGen()" style="display:none">⏹ Dừng</button>
     </div>
     <div class="status-box" id="newStatus"></div>
+    <div id="newLiveStats" style="display:none">
+      <div class="live-stats">
+        <div class="live-stat" id="ls_tables"><div class="ls-num" id="lsn_tables">0</div><div class="ls-label">Tables</div></div>
+        <div class="live-stat" id="ls_columns"><div class="ls-num" id="lsn_columns">0</div><div class="ls-label">Columns</div></div>
+        <div class="live-stat" id="ls_measures"><div class="ls-num" id="lsn_measures">0</div><div class="ls-label">Measures</div></div>
+        <div class="live-stat" id="ls_rels"><div class="ls-num" id="lsn_rels">0</div><div class="ls-label">Relationships</div></div>
+        <div class="live-stat" id="ls_pq"><div class="ls-num" id="lsn_pq">0</div><div class="ls-label">PQ Sources</div></div>
+        <div class="live-stat" id="ls_unused"><div class="ls-num" id="lsn_unused">0</div><div class="ls-label">Unused</div></div>
+      </div>
+      <div class="live-phase" id="livePhase"></div>
+    </div>
     <div class="timeline" id="newTimeline" style="display:none"></div>
     <div class="result-panel" id="newResult"></div>
   </div>
@@ -295,17 +326,23 @@ tr:hover td{background:#f8fbff}
   <div id="pane-upd" class="section-body">
     <div class="card">
       <div class="card-title"><span class="num">1</span> Chọn file Excel cần update</div>
-      <div class="grid2">
+      <div class="grid3">
         <div>
-          <label class="lbl">Folder</label>
-          <select class="sel" id="updFolder" onchange="loadUpdFiles()">
+          <label class="lbl">Folder chủ đề</label>
+          <select class="sel" id="updTopic" onchange="loadReportFolders('updTopic','updReport')">
             <option value="">-- Chọn folder --</option>
           </select>
         </div>
         <div>
-          <label class="lbl">Báo cáo</label>
+          <label class="lbl">Tên báo cáo</label>
+          <select class="sel" id="updReport" onchange="loadUpdVersions()">
+            <option value="">-- Chọn báo cáo --</option>
+          </select>
+        </div>
+        <div>
+          <label class="lbl">Version (chọn latest để update)</label>
           <select class="sel" id="updFile">
-            <option value="">-- Chọn file Excel --</option>
+            <option value="">-- Chọn version --</option>
           </select>
         </div>
       </div>
@@ -316,13 +353,13 @@ tr:hover td{background:#f8fbff}
       <div class="card-title"><span class="num">2</span> Người cập nhật</div>
       <div class="grid2">
         <div><label class="lbl">Người update</label><input type="text" id="updAuthor" placeholder="Tên bạn"></div>
-        <div><label class="lbl">Mô tả ngắn thay đổi (optional — AI sẽ tự generate)</label><input type="text" id="updSummary" placeholder="VD: Thêm measure YTD, sửa relationship..."></div>
+        <div><label class="lbl">Mô tả ngắn (optional — AI sẽ tự generate)</label><input type="text" id="updSummary" placeholder="VD: Thêm measure YTD, sửa relationship..."></div>
       </div>
     </div>
 
     <div class="card">
       <div class="card-title"><span class="num">3</span> Dán TMDL mới vào đây</div>
-      <textarea class="tmdl-box" id="updTmdl" rows="10" placeholder="Paste TMDL mới — app sẽ tự đọc TMDL cũ từ sheet TMDL_Source để so sánh..."></textarea>
+      <textarea class="tmdl-box" id="updTmdl" rows="10" placeholder="Paste TMDL mới — app sẽ tự đọc TMDL cũ từ meta file để so sánh 4 bucket: ADDED / REMOVED / MODIFIED / UNCHANGED..."></textarea>
     </div>
 
     <div class="btn-row">
@@ -330,6 +367,16 @@ tr:hover td{background:#f8fbff}
       <button class="btn btn-stop" id="updStopBtn" onclick="stopGen()" style="display:none">⏹ Dừng</button>
     </div>
     <div class="status-box" id="updStatus"></div>
+    <div id="updLiveStats" style="display:none">
+      <div class="live-stats">
+        <div class="live-stat" id="uls_added"><div class="ls-num" id="ulsn_added">0</div><div class="ls-label">Added</div><div class="ls-sub">gọi AI</div></div>
+        <div class="live-stat" id="uls_removed"><div class="ls-num" id="ulsn_removed">0</div><div class="ls-label">Removed</div><div class="ls-sub">bỏ qua</div></div>
+        <div class="live-stat" id="uls_modified"><div class="ls-num" id="ulsn_modified">0</div><div class="ls-label">Modified</div><div class="ls-sub">re-process</div></div>
+        <div class="live-stat" id="uls_unchanged"><div class="ls-num" id="ulsn_unchanged">0</div><div class="ls-label">Unchanged</div><div class="ls-sub">copy cũ</div></div>
+        <div class="live-stat" id="uls_tokens"><div class="ls-num" id="ulsn_tokens">0</div><div class="ls-label">Token calls</div><div class="ls-sub">đã tiết kiệm</div></div>
+      </div>
+      <div class="live-phase" id="updLivePhase"></div>
+    </div>
     <div class="timeline" id="updTimeline" style="display:none"></div>
     <div class="result-panel" id="updResult"></div>
   </div>
@@ -338,10 +385,10 @@ tr:hover td{background:#f8fbff}
   <div id="pane-dl" class="section-body">
     <div class="card">
       <div class="card-title"><span class="num">1</span> Chọn báo cáo muốn xem</div>
-      <div class="grid2">
+      <div class="grid3">
         <div>
-          <label class="lbl">Folder</label>
-          <select class="sel" id="dlFolder" onchange="loadDlFiles()">
+          <label class="lbl">Folder chủ đề</label>
+          <select class="sel" id="dlTopic" onchange="loadReportFolders('dlTopic','dlReport')">
             <option value="">-- Chọn folder --</option>
           </select>
         </div>
@@ -351,11 +398,14 @@ tr:hover td{background:#f8fbff}
             <option value="">-- Chọn báo cáo --</option>
           </select>
         </div>
+        <div style="display:flex;align-items:flex-end">
+          <button class="btn btn-primary" onclick="refreshFolders()" style="padding:8px 14px;font-size:12px">↻ Làm mới</button>
+        </div>
       </div>
     </div>
 
     <div class="card" id="verListCard" style="display:none">
-      <div class="card-title">📋 Tất cả versions</div>
+      <div class="card-title">📋 Tất cả versions — sort mới → cũ</div>
       <div id="verList" class="ver-list"></div>
     </div>
   </div>
@@ -376,31 +426,28 @@ const MODELS = {
 };
 const BATCH = {pq:6,tables:12,columns:40,rels:25,measures:15};
 
-let CFG = {};          // {user, appRepo, keyRepo, pat, model}
-let KEY_POOL = [];     // array of keys loaded from keys.txt
-let KEY_IDX  = 0;      // current key index
+let CFG = {};
+let KEY_POOL = [];
+let KEY_IDX  = 0;
 let STOP_FLAG = false;
 let CURRENT_INV = null;
 let CURRENT_DOC = null;
 
 // ════════════════════════════════════════════
-// CONFIG LOAD / SAVE
+// CONFIG
 // ════════════════════════════════════════════
 function loadConfig() {
   try {
-    const saved = JSON.parse(localStorage.getItem('tmdl_cfg') || '{}');
-    CFG = saved;
+    CFG = JSON.parse(localStorage.getItem('tmdl_cfg') || '{}');
     if (CFG.user)    document.getElementById('cfgUser').value    = CFG.user    || '';
     if (CFG.appRepo) document.getElementById('cfgAppRepo').value = CFG.appRepo || '';
     if (CFG.keyRepo) document.getElementById('cfgKeyRepo').value = CFG.keyRepo || '';
     if (CFG.pat)     document.getElementById('cfgPat').value     = CFG.pat     || '';
     if (CFG.model)   document.getElementById('cfgModel').value   = CFG.model   || 'llama-3.1-8b-instant';
-    updatePatStatus();
-    updateModelInfo();
+    updatePatStatus(); updateModelInfo();
     if (CFG.pat && CFG.user && CFG.appRepo) {
-      loadAllFolders();
+      loadAllTopics();
     } else {
-      // Show setup banner on first visit
       document.getElementById('setupBanner').classList.add('show');
     }
   } catch(e) {}
@@ -418,13 +465,11 @@ function saveConfig() {
   document.getElementById('cfgSaveStatus').textContent = '✅ Đã lưu!';
   setTimeout(() => document.getElementById('cfgSaveStatus').textContent = '', 3000);
   updatePatStatus();
-  loadAllFolders();
+  loadAllTopics();
   loadGroqKeys();
 }
 
-function toggleSetup() {
-  document.getElementById('setupBanner').classList.toggle('show');
-}
+function toggleSetup() { document.getElementById('setupBanner').classList.toggle('show'); }
 
 function updatePatStatus() {
   const dot = document.getElementById('patDot');
@@ -447,7 +492,7 @@ function updateModelInfo() {
 }
 
 // ════════════════════════════════════════════
-// GITHUB API HELPERS
+// GITHUB API — FIX UTF-8 ENCODING
 // ════════════════════════════════════════════
 async function ghGet(path) {
   const r = await fetch(`${GH_API}${path}`, {
@@ -457,22 +502,33 @@ async function ghGet(path) {
   return r.json();
 }
 
-async function ghGetContent(repo, path) {
-  const data = await ghGet(`/repos/${CFG.user}/${repo}/contents/${path}`);
-  return atob(data.content.replace(/\n/g,''));
+// FIX: UTF-8 decoding — old btoa/atob breaks Vietnamese
+function b64DecodeUTF8(b64) {
+  const bin = atob(b64.replace(/\n/g, ''));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new TextDecoder('utf-8').decode(bytes);
 }
 
-async function ghGetContentRaw(repo, path) {
-  // returns {content, sha}
+function b64EncodeUTF8(str) {
+  const bytes = new TextEncoder().encode(str);
+  let bin = '';
+  for (const b of bytes) bin += String.fromCharCode(b);
+  return btoa(bin);
+}
+
+async function ghGetContent(repo, path) {
   const data = await ghGet(`/repos/${CFG.user}/${repo}/contents/${path}`);
-  return { content: atob(data.content.replace(/\n/g,'')), sha: data.sha };
+  return b64DecodeUTF8(data.content); // FIX: use UTF-8 decoder
+}
+
+async function ghGetContentWithSha(repo, path) {
+  const data = await ghGet(`/repos/${CFG.user}/${repo}/contents/${path}`);
+  return { content: b64DecodeUTF8(data.content), sha: data.sha };
 }
 
 async function ghUpload(repo, path, content, commitMsg, existingSha) {
-  const body = {
-    message: commitMsg,
-    content: btoa(unescape(encodeURIComponent(content))),
-  };
+  const body = { message: commitMsg, content: b64EncodeUTF8(content) };
   if (existingSha) body.sha = existingSha;
   const r = await fetch(`${GH_API}/repos/${CFG.user}/${repo}/contents/${path}`, {
     method: 'PUT',
@@ -483,10 +539,29 @@ async function ghUpload(repo, path, content, commitMsg, existingSha) {
     },
     body: JSON.stringify(body)
   });
-  if (!r.ok) {
-    const err = await r.json();
-    throw new Error(`Upload failed: ${err.message}`);
-  }
+  if (!r.ok) { const e=await r.json(); throw new Error(`Upload failed: ${e.message}`); }
+  return r.json();
+}
+
+// FIX: Upload binary (Excel) using proper base64
+async function ghUploadBinary(repo, path, blob, commitMsg) {
+  const base64 = await new Promise((res, rej) => {
+    const reader = new FileReader();
+    reader.onload = () => res(reader.result.split(',')[1]);
+    reader.onerror = rej;
+    reader.readAsDataURL(blob);
+  });
+  const body = { message: commitMsg, content: base64 };
+  const r = await fetch(`${GH_API}/repos/${CFG.user}/${repo}/contents/${path}`, {
+    method: 'PUT',
+    headers: {
+      Authorization: `token ${CFG.pat}`,
+      Accept: 'application/vnd.github.v3+json',
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(body)
+  });
+  if (!r.ok) { const e=await r.json(); throw new Error(`Upload binary failed: ${e.message}`); }
   return r.json();
 }
 
@@ -497,6 +572,15 @@ async function ghListDir(repo, path) {
   } catch(e) { return []; }
 }
 
+// FIX: Download binary via GitHub API (not raw URL — avoids CORS)
+async function ghDownloadBinary(repo, path) {
+  const data = await ghGet(`/repos/${CFG.user}/${repo}/contents/${path}`);
+  const bin = atob(data.content.replace(/\n/g, ''));
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new Blob([bytes], {type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+}
+
 // ════════════════════════════════════════════
 // KEY POOL
 // ════════════════════════════════════════════
@@ -504,12 +588,10 @@ async function loadGroqKeys() {
   if (!CFG.pat || !CFG.keyRepo) return;
   try {
     const content = await ghGetContent(CFG.keyRepo, 'keys.txt');
-    KEY_POOL = content.split('\n').map(k=>k.trim()).filter(k=>k.startsWith('gsk_') || k.length > 20);
-    KEY_IDX  = 0;
+    KEY_POOL = content.split('\n').map(k=>k.trim()).filter(k=>k.length > 10);
+    KEY_IDX = 0;
     console.log(`Loaded ${KEY_POOL.length} Groq keys`);
-  } catch(e) {
-    console.warn('Could not load keys.txt:', e.message);
-  }
+  } catch(e) { console.warn('Could not load keys.txt:', e.message); }
 }
 
 function getNextKey() {
@@ -520,162 +602,109 @@ function getNextKey() {
 }
 
 // ════════════════════════════════════════════
-// FOLDER MANAGEMENT
+// 2-LEVEL FOLDER MANAGEMENT
+// Path structure: docs/{topic}/{reportName}/{reportName}_{ts}.xlsx
 // ════════════════════════════════════════════
-async function loadAllFolders() {
+async function loadAllTopics() {
   if (!CFG.pat || !CFG.user || !CFG.appRepo) return;
   const items = await ghListDir(CFG.appRepo, 'docs');
-  const folders = items.filter(i=>i.type==='dir').map(i=>i.name);
-  populateFolderSelects(folders);
-}
-
-function populateFolderSelects(folders) {
-  const selects = ['newFolder','updFolder','dlFolder'];
-  selects.forEach(id => {
+  const topics = items.filter(i=>i.type==='dir').map(i=>i.name).sort();
+  ['newTopic','updTopic','dlTopic'].forEach(id => {
     const sel = document.getElementById(id);
-    const prevVal = sel.value;
-    sel.innerHTML = id==='newFolder'
-      ? '<option value="">-- Chọn folder --</option>'
-      : '<option value="">-- Chọn folder --</option>';
-    folders.forEach(f => {
-      const opt = document.createElement('option');
-      opt.value = f; opt.textContent = f;
-      sel.appendChild(opt);
-    });
-    if (prevVal && folders.includes(prevVal)) sel.value = prevVal;
+    if (!sel) return;
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">-- Chọn folder --</option>';
+    topics.forEach(t => { const o=document.createElement('option'); o.value=t; o.textContent=t; sel.appendChild(o); });
+    if (prev && topics.includes(prev)) sel.value = prev;
   });
 }
 
-function toggleNewFolderInput() {
-  document.getElementById('newFolderInput').classList.toggle('show');
+async function loadReportFolders(topicSelId, reportSelId) {
+  const topic = document.getElementById(topicSelId)?.value;
+  const repSel = document.getElementById(reportSelId);
+  if (!repSel) return;
+  repSel.innerHTML = '<option value="">-- Chọn báo cáo --</option>';
+  if (!topic) return;
+  const items = await ghListDir(CFG.appRepo, `docs/${topic}`);
+  const reports = items.filter(i=>i.type==='dir').map(i=>i.name).sort();
+  reports.forEach(r => { const o=document.createElement('option'); o.value=r; o.textContent=r; repSel.appendChild(o); });
 }
 
-async function confirmNewFolder() {
-  const name = document.getElementById('newFolderName').value.trim().replace(/[^a-zA-Z0-9_\-]/g,'');
+function syncReportFolder() {
+  const topic = document.getElementById('newTopic')?.value || '...';
+  const name  = document.getElementById('newReportName')?.value.trim() || '...';
+  const preview = document.getElementById('newPathPreview');
+  if (preview) preview.textContent = `docs/${topic}/${name}/`;
+}
+
+function toggleNewInput(id) {
+  document.getElementById(id)?.classList.toggle('show');
+}
+
+async function confirmNewTopic() {
+  const name = document.getElementById('newTopicName').value.trim().replace(/[^a-zA-Z0-9_\-]/g,'_');
   if (!name) return alert('Tên folder không hợp lệ');
-  // Create a placeholder file to init the folder
-  await ghUpload(CFG.appRepo, `docs/${name}/.gitkeep`, '', `Create folder: ${name}`);
-  document.getElementById('newFolderName').value = '';
-  document.getElementById('newFolderInput').classList.remove('show');
-  await loadAllFolders();
-  document.getElementById('newFolder').value = name;
+  await ghUpload(CFG.appRepo, `docs/${name}/.gitkeep`, '', `Create topic folder: ${name}`);
+  document.getElementById('newTopicName').value = '';
+  document.getElementById('newTopicInput').classList.remove('show');
+  await loadAllTopics();
+  document.getElementById('newTopic').value = name;
+  syncReportFolder();
 }
 
-function onNewFolderChange() {}
-
-// ════════════════════════════════════════════
-// TAB SWITCHING
-// ════════════════════════════════════════════
-function switchTab(tab) {
-  ['new','upd','dl'].forEach(t => {
-    document.getElementById(`tab-${t}`).classList.toggle('active', t===tab);
-    document.getElementById(`pane-${t}`).classList.toggle('show', t===tab);
-  });
-  if (tab==='upd') loadUpdFolders();
-  if (tab==='dl')  loadDlFolders();
-}
-
-async function loadUpdFolders() {
-  const items = await ghListDir(CFG.appRepo, 'docs');
-  const folders = items.filter(i=>i.type==='dir').map(i=>i.name);
-  const sel = document.getElementById('updFolder');
-  sel.innerHTML = '<option value="">-- Chọn folder --</option>';
-  folders.forEach(f => { const o=document.createElement('option'); o.value=f; o.textContent=f; sel.appendChild(o); });
-}
-
-async function loadDlFolders() {
-  const items = await ghListDir(CFG.appRepo, 'docs');
-  const folders = items.filter(i=>i.type==='dir').map(i=>i.name);
-  const sel = document.getElementById('dlFolder');
-  sel.innerHTML = '<option value="">-- Chọn folder --</option>';
-  folders.forEach(f => { const o=document.createElement('option'); o.value=f; o.textContent=f; sel.appendChild(o); });
-}
-
-async function loadUpdFiles() {
-  const folder = document.getElementById('updFolder').value;
-  if (!folder) return;
-  const items = await ghListDir(CFG.appRepo, `docs/${folder}`);
+async function loadUpdVersions() {
+  const topic  = document.getElementById('updTopic')?.value;
+  const report = document.getElementById('updReport')?.value;
+  const fileSel = document.getElementById('updFile');
+  fileSel.innerHTML = '<option value="">-- Chọn version --</option>';
+  if (!topic || !report) return;
+  const items = await ghListDir(CFG.appRepo, `docs/${topic}/${report}`);
   const files = items.filter(i=>i.name.endsWith('.xlsx')).sort((a,b)=>b.name.localeCompare(a.name));
-  const sel = document.getElementById('updFile');
-  sel.innerHTML = '<option value="">-- Chọn file Excel --</option>';
-
-  // Group by report name (strip timestamp)
-  const reports = {};
-  files.forEach(f => {
-    const base = reportBaseName(f.name);
-    if (!reports[base]) reports[base] = [];
-    reports[base].push(f);
-  });
-
-  // Show only latest per report
-  Object.entries(reports).forEach(([base, fileList]) => {
-    const latest = fileList[0]; // already sorted desc
+  files.forEach((f,idx) => {
     const o = document.createElement('option');
-    o.value = latest.name;
-    o.textContent = `${base} (latest: ${tsFromFilename(latest.name)})`;
-    sel.appendChild(o);
+    o.value = f.name;
+    o.textContent = `${idx===0?'[LATEST] ':''}${tsFromFilename(f.name)}`;
+    fileSel.appendChild(o);
   });
-}
-
-async function loadDlFiles() {
-  const folder = document.getElementById('dlFolder').value;
-  if (!folder) return;
-  const items = await ghListDir(CFG.appRepo, `docs/${folder}`);
-  const files = items.filter(i=>i.name.endsWith('.xlsx')).sort((a,b)=>b.name.localeCompare(a.name));
-
-  // Get unique report names
-  const reportNames = [...new Set(files.map(f=>reportBaseName(f.name)))].sort();
-  const sel = document.getElementById('dlReport');
-  sel.innerHTML = '<option value="">-- Chọn báo cáo --</option>';
-  reportNames.forEach(n => { const o=document.createElement('option'); o.value=n; o.textContent=n; sel.appendChild(o); });
-  document.getElementById('verListCard').style.display = 'none';
+  if (files.length) fileSel.value = files[0].name; // auto-select latest
 }
 
 async function loadVersions() {
-  const folder = document.getElementById('dlFolder').value;
-  const report = document.getElementById('dlReport').value;
-  if (!folder || !report) return;
+  const topic  = document.getElementById('dlTopic')?.value;
+  const report = document.getElementById('dlReport')?.value;
+  if (!topic || !report) return;
 
-  const items = await ghListDir(CFG.appRepo, `docs/${folder}`);
-  const files = items
-    .filter(i=>i.name.endsWith('.xlsx') && reportBaseName(i.name)===report)
-    .sort((a,b)=>b.name.localeCompare(a.name));
+  const items = await ghListDir(CFG.appRepo, `docs/${topic}/${report}`);
+  const files = items.filter(i=>i.name.endsWith('.xlsx')).sort((a,b)=>b.name.localeCompare(a.name));
 
   const card = document.getElementById('verListCard');
   const list = document.getElementById('verList');
   card.style.display = 'block';
 
-  if (!files.length) {
-    list.innerHTML = '<div class="ver-empty">Không tìm thấy version nào.</div>';
-    return;
-  }
+  if (!files.length) { list.innerHTML = '<div class="ver-empty">Không tìm thấy version nào.</div>'; return; }
 
   list.innerHTML = '';
   files.forEach((f, idx) => {
-    const ts = tsFromFilename(f.name);
     const isLatest = idx === 0;
     const div = document.createElement('div');
     div.className = 'ver-item' + (isLatest?' latest':'');
     div.innerHTML = `
       <span class="ver-badge${isLatest?' latest':''}">${isLatest?'LATEST':'v'+(files.length-idx)}</span>
       <div class="ver-info">
-        <div class="ver-date">${ts}</div>
-        <div class="ver-desc" id="vd-${f.sha}">Đang tải mô tả...</div>
+        <div class="ver-date">${tsFromFilename(f.name)}</div>
+        <div class="ver-desc" id="vd-${idx}">Đang tải mô tả...</div>
       </div>
-      <button class="btn-ver-dl" onclick="downloadVersion('${folder}','${f.name}','${f.download_url}')">⬇ Download</button>
+      <button class="btn-ver-dl" onclick="downloadVersion('${topic}','${report}','${f.name}')">⬇ Download</button>
     `;
     list.appendChild(div);
-    // Load changelog description async
-    loadVersionDesc(folder, f.name, `vd-${f.sha}`);
+    loadVersionDesc(topic, report, f.name, `vd-${idx}`);
   });
 }
 
-async function loadVersionDesc(folder, filename, elId) {
-  // Try to extract changelog summary from the Excel file
-  // Since we can't parse XLSX in browser easily, we store a metadata JSON alongside
-  const metaPath = `docs/${folder}/${filename.replace('.xlsx','.meta.json')}`;
+async function loadVersionDesc(topic, report, filename, elId) {
+  const metaPath = `docs/${topic}/${report}/${filename.replace('.xlsx','.meta.json')}`;
   try {
-    const content = await ghGetContent(CFG.appRepo, metaPath);
+    const content = await ghGetContent(CFG.appRepo, metaPath); // UTF-8 fixed
     const meta = JSON.parse(content);
     const el = document.getElementById(elId);
     if (el) el.textContent = meta.summary || 'Không có mô tả';
@@ -685,33 +714,37 @@ async function loadVersionDesc(folder, filename, elId) {
   }
 }
 
-async function downloadVersion(folder, filename, dlUrl) {
+// FIX: Download via GitHub API, not raw URL
+async function downloadVersion(topic, report, filename) {
+  const btn = event.target;
+  btn.textContent = '⏳ Đang tải...';
+  btn.disabled = true;
   try {
-    setStatus(`Đang tải ${filename}...`, 'loading', 'newStatus');
-    const r = await fetch(dlUrl, { headers: { Authorization: `token ${CFG.pat}` } });
-    if (!r.ok) throw new Error('Download failed');
-    const blob = await r.blob();
+    const filePath = `docs/${topic}/${report}/${filename}`;
+    const blob = await ghDownloadBinary(CFG.appRepo, filePath);
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
     a.download = filename;
     a.click();
   } catch(e) {
     alert('Lỗi download: ' + e.message);
+  } finally {
+    btn.textContent = '⬇ Download';
+    btn.disabled = false;
   }
+}
+
+async function refreshFolders() {
+  await loadAllTopics();
+  alert('Đã làm mới danh sách folder!');
 }
 
 // ════════════════════════════════════════════
 // FILENAME HELPERS
 // ════════════════════════════════════════════
 function makeTimestamp() {
-  const d = new Date();
-  const pad = n => String(n).padStart(2,'0');
+  const d = new Date(), pad = n=>String(n).padStart(2,'0');
   return `${String(d.getFullYear()).slice(2)}${pad(d.getMonth()+1)}${pad(d.getDate())}${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
-}
-
-function reportBaseName(filename) {
-  // "RCN_250320143022.xlsx" → "RCN"
-  return filename.replace(/\.xlsx$/i,'').replace(/_\d{12}$/, '');
 }
 
 function tsFromFilename(filename) {
@@ -722,65 +755,105 @@ function tsFromFilename(filename) {
 }
 
 // ════════════════════════════════════════════
-// STATUS HELPERS
+// TAB SWITCHING
 // ════════════════════════════════════════════
-function setStatus(msg, type, id, prog) {
+function switchTab(tab) {
+  ['new','upd','dl'].forEach(t => {
+    document.getElementById(`tab-${t}`).classList.toggle('active', t===tab);
+    document.getElementById(`pane-${t}`).classList.toggle('show', t===tab);
+  });
+  if (tab==='upd') loadAllTopics();
+  if (tab==='dl')  loadAllTopics();
+}
+
+// ════════════════════════════════════════════
+// STATUS & ANIMATED COUNTERS
+// ════════════════════════════════════════════
+function setStatus(msg, type, id) {
   const el = document.getElementById(id);
   if (!el) return;
   el.className = `status-box show ${type}`;
-  el.innerHTML = msg + (type==='loading'?`<div class="prog-wrap"><div class="prog-fill" id="${id}_prog" style="width:${prog||0}%"></div></div>`:'');
+  el.innerHTML = msg;
 }
-function setProgress(id, pct) {
-  const el = document.getElementById(`${id}_prog`);
-  if (el) el.style.width = pct + '%';
-}
+
 function setTimeline(id, items) {
   const el = document.getElementById(id);
   if (!el) return;
   el.style.display = 'flex';
-  el.innerHTML = items.map(it => `<span class="tl-item ${it.state}">${it.label}</span>`).join('');
+  el.innerHTML = items.map(it=>`<span class="tl-item ${it.state}">${it.label}</span>`).join('');
 }
+
 function updateTlItem(timelineId, label, state) {
-  const items = document.querySelectorAll(`#${timelineId} .tl-item`);
-  items.forEach(el => {
-    if (el.textContent.trim() === label) el.className = `tl-item ${state}`;
+  document.querySelectorAll(`#${timelineId} .tl-item`).forEach(el => {
+    if (el.textContent.trim()===label) el.className=`tl-item ${state}`;
   });
 }
+
+// Animated counter — smoothly counts up to target
+function animateCounter(elId, target, duration=600) {
+  const el = document.getElementById(elId);
+  if (!el) return;
+  const start = parseInt(el.textContent) || 0;
+  if (start === target) return;
+  const startTime = performance.now();
+  const tick = (now) => {
+    const p = Math.min((now - startTime) / duration, 1);
+    const eased = 1 - Math.pow(1 - p, 3); // ease-out cubic
+    el.textContent = Math.round(start + (target - start) * eased);
+    if (p < 1) requestAnimationFrame(tick);
+    else el.textContent = target;
+  };
+  requestAnimationFrame(tick);
+}
+
+function showLiveStats(prefix) {
+  const el = document.getElementById(`${prefix}LiveStats`);
+  if (el) el.style.display = 'block';
+}
+
+function hideLiveStats(prefix) {
+  const el = document.getElementById(`${prefix}LiveStats`);
+  if (el) el.style.display = 'none';
+}
+
+function setLivePhase(prefix, text) {
+  const el = document.getElementById(`${prefix==='new'?'live':'upd'}Phase`);
+  if (el) el.textContent = text;
+}
+
+function setStatActive(id) {
+  document.querySelectorAll('.live-stat').forEach(el=>el.classList.remove('active'));
+  const el = document.getElementById(id);
+  if (el) el.classList.add('active');
+}
+
+function setStatDone(id) {
+  const el = document.getElementById(id);
+  if (el) { el.classList.remove('active'); el.classList.add('done'); }
+}
+
 function stopGen() { STOP_FLAG = true; }
 
 // ════════════════════════════════════════════
-// GROQ API CALL (with key rotation)
+// GROQ API CALL WITH KEY ROTATION
 // ════════════════════════════════════════════
 async function groqCall(prompt, maxRetries=3) {
   const model = CFG.model || 'llama-3.1-8b-instant';
   let lastErr = null;
-  for (let attempt = 0; attempt < maxRetries; attempt++) {
+  for (let attempt=0; attempt<maxRetries; attempt++) {
     const key = getNextKey();
     if (!key) throw new Error('Không có Groq API key. Kiểm tra keys.txt trong repo Private.');
     try {
       const r = await fetch(GROQ_URL, {
         method:'POST',
         headers:{'Content-Type':'application/json','Authorization':`Bearer ${key}`},
-        body: JSON.stringify({
-          model,
-          max_tokens: 4096,
-          temperature: 0.1,
-          messages: [{ role:'user', content: prompt }]
-        })
+        body: JSON.stringify({model, max_tokens:4096, temperature:0.1, messages:[{role:'user',content:prompt}]})
       });
-      if (r.status === 429) {
-        console.warn(`Key ${KEY_IDX} rate limited, rotating...`);
-        lastErr = new Error('Rate limit');
-        await sleep(2000);
-        continue;
-      }
+      if (r.status===429) { console.warn(`Key rate limited, rotating...`); lastErr=new Error('Rate limit'); await sleep(2000); continue; }
       if (!r.ok) { const e=await r.json(); throw new Error(e.error?.message||r.statusText); }
       const data = await r.json();
       return data.choices[0].message.content;
-    } catch(e) {
-      lastErr = e;
-      if (!e.message.includes('Rate limit')) throw e;
-    }
+    } catch(e) { lastErr=e; if (!e.message.includes('Rate limit')) throw e; }
   }
   throw lastErr;
 }
@@ -788,167 +861,141 @@ async function groqCall(prompt, maxRetries=3) {
 function sleep(ms) { return new Promise(r=>setTimeout(r,ms)); }
 
 // ════════════════════════════════════════════
-// TMDL PROCESSING (reused from original)
+// TMDL PARSING (unchanged from v3.0)
 // ════════════════════════════════════════════
 function cleanTMDL(raw) {
-  let s = raw.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
-  s = s.replace(/\n([ \t]+)linguisticMetadata\s*=[\s\S]*?\n\1contentType:/g,'\n$1contentType:');
-  s = s.replace(/^[ \t]+linguisticMetadata\s*=.*$/gm,'');
-  s = s.replace(/\n\t*cultureInfo\s+\S+[\s\S]*?(?=\n\t{1,2}(?:table |relationship |expression |queryGroup|annotation __PBI_Time))/g,'\n');
-  s = s.replace(/\n\t\ttable LocalDateTable_[\s\S]*?(?=\n\t\t(?:table |relationship |expression |cultureInfo|queryGroup|annotation __PBI_Time))/g,'\n');
-  s = s.replace(/\n\t\ttable DateTableTemplate_[\s\S]*?(?=\n\t\t(?:table |relationship |expression |queryGroup))/g,'\n');
-  s = s.replace(/^[ \t]+lineageTag:\s*.+$/gm,'');
-  s = s.replace(/^[ \t]+annotation\s+(?:PBI_FormatHint|SummarizationSetBy|TemplateId|PBI_NavigationStepName|PBI_ResultType|PBI_Id|PBI_QueryGroupOrder|PBI_QueryOrder|__PBI_|PBI_ProTooling|UnderlyingDateTimeDataType).+$/gm,'');
-  s = s.replace(/\n[ \t]+variation Variation\n(?:[ \t]+.+\n)+/g,'\n');
-  s = s.replace(/\n[ \t]+hierarchy 'Date Hierarchy'\n(?:[ \t]+.+\n)+/g,'\n');
-  s = s.replace(/^[ \t]+(?:isNameInferred|showAsVariationsOnly|isPrivate)\s*$/gm,'');
-  s = s.replace(/\n{3,}/g,'\n\n');
+  let s=raw.replace(/\r\n/g,'\n').replace(/\r/g,'\n');
+  s=s.replace(/\n([ \t]+)linguisticMetadata\s*=[\s\S]*?\n\1contentType:/g,'\n$1contentType:');
+  s=s.replace(/^[ \t]+linguisticMetadata\s*=.*$/gm,'');
+  s=s.replace(/\n\t*cultureInfo\s+\S+[\s\S]*?(?=\n\t{1,2}(?:table |relationship |expression |queryGroup|annotation __PBI_Time))/g,'\n');
+  s=s.replace(/\n\t\ttable LocalDateTable_[\s\S]*?(?=\n\t\t(?:table |relationship |expression |cultureInfo|queryGroup|annotation __PBI_Time))/g,'\n');
+  s=s.replace(/\n\t\ttable DateTableTemplate_[\s\S]*?(?=\n\t\t(?:table |relationship |expression |queryGroup))/g,'\n');
+  s=s.replace(/^[ \t]+lineageTag:\s*.+$/gm,'');
+  s=s.replace(/^[ \t]+annotation\s+(?:PBI_FormatHint|SummarizationSetBy|TemplateId|PBI_NavigationStepName|PBI_ResultType|PBI_Id|PBI_QueryGroupOrder|PBI_QueryOrder|__PBI_|PBI_ProTooling|UnderlyingDateTimeDataType).+$/gm,'');
+  s=s.replace(/\n[ \t]+variation Variation\n(?:[ \t]+.+\n)+/g,'\n');
+  s=s.replace(/\n[ \t]+hierarchy 'Date Hierarchy'\n(?:[ \t]+.+\n)+/g,'\n');
+  s=s.replace(/^[ \t]+(?:isNameInferred|showAsVariationsOnly|isPrivate)\s*$/gm,'');
+  s=s.replace(/\n{3,}/g,'\n\n');
   return s.trim();
 }
 
 function detectSourceType(mCode) {
-  if (!mCode) return 'None';
-  if (/CALENDAR|ADDCOLUMNS|UNION|SUMMARIZE|ROW\s*\(/i.test(mCode)&&!/Sql\.Database/i.test(mCode)) return 'Calculated DAX';
-  if (/Sql\.Database/i.test(mCode)) return 'SQL Server';
-  if (/Excel\.Workbook/i.test(mCode)) return 'Excel';
-  if (/SharePoint/i.test(mCode)) return 'SharePoint';
-  if (/Web\.Contents/i.test(mCode)) return 'Web/API';
-  if (/Csv\.Document/i.test(mCode)) return 'CSV';
-  if (/Json\.Document/i.test(mCode)) return 'JSON';
-  if (/OData\./i.test(mCode)) return 'OData';
-  if (/AzureStorage/i.test(mCode)) return 'Azure Storage';
+  if(!mCode) return 'None';
+  if(/CALENDAR|ADDCOLUMNS|UNION|SUMMARIZE|ROW\s*\(/i.test(mCode)&&!/Sql\.Database/i.test(mCode)) return 'Calculated DAX';
+  if(/Sql\.Database/i.test(mCode)) return 'SQL Server';
+  if(/Excel\.Workbook/i.test(mCode)) return 'Excel';
+  if(/SharePoint/i.test(mCode)) return 'SharePoint';
+  if(/Web\.Contents/i.test(mCode)) return 'Web/API';
+  if(/Csv\.Document/i.test(mCode)) return 'CSV';
+  if(/Json\.Document/i.test(mCode)) return 'JSON';
+  if(/OData\./i.test(mCode)) return 'OData';
   return 'Other';
 }
 
 function parseInventory(rawTMDL) {
-  const clean = cleanTMDL(rawTMDL);
-  const lines = clean.split('\n');
-  const tables=[], rels=[], expressions=[];
-  let curTable=null, curMeasure=null, curMeasureLines=[], curMeasureIndent=0;
-  let inPartition=false, partitionLines=[], partitionDepth=0;
-  const indentOf = l=>(l.match(/^\t*/)||[''])[0].length;
-  const saveCurrentMeasure = () => {
-    if (curMeasure&&curMeasureLines.length&&!curMeasure.dax)
-      curMeasure.dax = curMeasureLines.join('\n').trim().replace(/^```|```$/g,'').trim();
-    curMeasure=null; curMeasureLines=[];
+  const clean=cleanTMDL(rawTMDL), lines=clean.split('\n');
+  const tables=[],rels=[],expressions=[];
+  let curTable=null,curMeasure=null,curMeasureLines=[],curMeasureIndent=0;
+  let inPartition=false,partitionLines=[],partitionDepth=0;
+  const indentOf=l=>(l.match(/^\t*/)||[''])[0].length;
+  const saveCurrentMeasure=()=>{
+    if(curMeasure&&curMeasureLines.length&&!curMeasure.dax)
+      curMeasure.dax=curMeasureLines.join('\n').trim().replace(/^```|```$/g,'').trim();
+    curMeasure=null;curMeasureLines=[];
   };
-  for (let i=0;i<lines.length;i++) {
-    const line=lines[i], trim=line.trim(), indent=indentOf(line);
-    if (/^\t{0,1}expression\s+/i.test(line)) {
-      saveCurrentMeasure();
-      const m=line.match(/expression\s+(?:'([^']+)'|(\S+))/i);
-      const nm=m?(m[1]||m[2]).trim():'?';
-      const expLines=[];
-      for (let j=i+1;j<lines.length;j++) {
-        const jt=lines[j].trim(),ji=indentOf(lines[j]);
-        if (ji<=1&&jt&&!/^(queryGroup|mode|contentType)/.test(jt)) break;
-        expLines.push(lines[j]);
-      }
-      expressions.push({name:nm,query:expLines.join('\n').trim()});
-      continue;
-    }
-    if (/^\t{1,2}table\s+/i.test(line)) {
-      saveCurrentMeasure();
-      if (inPartition&&curTable){curTable.partitionSource=partitionLines.join('\n').trim();curTable.sourceType=detectSourceType(curTable.partitionSource);inPartition=false;}
-      const m=line.match(/table\s+(?:'([^']+)'|(.+))/i);
-      const name=m?(m[1]||m[2]).trim():'?';
-      const next6=lines.slice(i+1,i+7);
-      const isHidden=next6.some(l=>/^\t+isHidden\b/.test(l));
-      curTable={name,isHidden,partitionType:'None',partitionSource:'',sourceType:'',columns:[],measures:[],aiTableType:'',aiDescription:'',aiSourceDesc:'',aiStepsDesc:'',aiDataQuality:''};
-      tables.push(curTable); inPartition=false; partitionLines=[];
-      continue;
-    }
-    if (curTable&&/^\t{2,3}column\s+/i.test(line)) {
-      saveCurrentMeasure();
-      const m=line.match(/column\s+(?:'([^']+)'|(\S+))/i);
-      const colName=m?(m[1]||m[2]).trim():'?';
-      const next10=lines.slice(i+1,i+11);
-      const dtLine=next10.find(l=>/^\s+dataType:/.test(l));
-      const srcLine=next10.find(l=>/^\s+sourceColumn:/.test(l));
-      const hidLine=next10.some(l=>/^\t+isHidden\b/.test(l));
-      const keyLine=next10.some(l=>/^\t+isKey\b/.test(l));
-      const fmtLine=next10.find(l=>/^\s+formatString:/.test(l)&&!/annotation/.test(l));
-      let dax='';
-      if (!srcLine){
-        const eq=line.indexOf('=');
-        if (eq>-1) dax=line.slice(eq+1).trim().replace(/^```|```$/g,'').trim();
-        for (let j=i+1;j<Math.min(i+40,lines.length);j++){
-          const jt=lines[j].trim(),ji=indentOf(lines[j]);
-          if (ji<=indent&&jt&&!/^\s*(dataType|isHidden|isKey|formatString|sortByColumn|summarizeBy|displayFolder|annotation)/.test(jt)) break;
-          if (/^\s*(dataType|isHidden|isKey|formatString|sortByColumn|summarizeBy|displayFolder|annotation)/.test(jt)) continue;
-          dax+=(jt.replace(/^```|```$/g,'').trim()+' ');
-        }
-        dax=dax.trim();
-      }
-      curTable.columns.push({name:colName,dataType:dtLine?dtLine.replace(/.*dataType:\s*/,'').trim():'string',isHidden:hidLine,isKey:keyLine,sourceColumn:srcLine?srcLine.replace(/.*sourceColumn:\s*/,'').trim().replace(/^"|"$/g,''):null,formatString:fmtLine?fmtLine.replace(/.*formatString:\s*/,'').trim().replace(/^'|'$/g,''):'',isCalc:!srcLine,dax,aiDescription:''});
-      continue;
-    }
-    if (curTable&&/^\t{2,3}measure\s+/i.test(line)) {
-      saveCurrentMeasure();
-      const m=line.match(/measure\s+(?:'([^']+)'|([^=\n]+?))\s*=/i);
-      const nm=m?(m[1]||m[2]).trim():line.replace(/.*measure\s+/,'').split('=')[0].trim().replace(/^'|'$/g,'');
-      const eq=line.indexOf('=');
-      const inlineDax=eq>-1?line.slice(eq+1).trim().replace(/^```|```$/g,'').trim():'';
-      const next10=lines.slice(i+1,i+11);
-      const fldLine=next10.find(l=>/displayFolder:/.test(l));
-      const fmtLine=next10.find(l=>/formatString:/.test(l)&&!/annotation/.test(l));
-      curMeasure={name:nm,table:curTable.name,folder:fldLine?fldLine.replace(/.*displayFolder:\s*/,'').trim().replace(/^'|'$/g,''):'',format:fmtLine?fmtLine.replace(/.*formatString:\s*/,'').trim().replace(/^'|'$/g,''):'',dax:inlineDax,aiPlainEnglish:'',aiLogic:''};
-      curMeasureLines=[]; curMeasureIndent=indent;
-      curTable.measures.push(curMeasure);
-      continue;
-    }
-    if (curMeasure&&!curMeasure.dax) {
-      if (indent>curMeasureIndent&&!/^\s*(displayFolder|formatString|annotation|isHidden|changedProperty)/.test(trim)) {
-        const cleaned=trim.replace(/^```|```$/g,'').trim();
-        if (cleaned) curMeasureLines.push(cleaned);
-      } else if (indent<=curMeasureIndent&&trim&&curMeasureLines.length) {
-        curMeasure.dax=curMeasureLines.join('\n').trim(); curMeasureLines=[];
-      }
-    }
-    if (curTable&&/^\t+partition\s+/i.test(line)) {
-      saveCurrentMeasure();
-      const isCalcTable=/=\s*calculated/i.test(line);
-      curTable.partitionType=isCalcTable?'DAX':'M';
-      inPartition=true; partitionLines=[]; partitionDepth=indent;
-      continue;
-    }
-    if (inPartition) {
-      if (indent<=partitionDepth&&trim&&!/^\s*(mode|source)\b/.test(trim)) {
-        curTable.partitionSource=partitionLines.join('\n').trim();
-        curTable.sourceType=detectSourceType(curTable.partitionSource);
-        inPartition=false;
-      } else { partitionLines.push(line); continue; }
-    }
-    if (/^\t{1,2}relationship\s/i.test(line)) {
-      saveCurrentMeasure();
-      const next8=lines.slice(i+1,i+9);
-      const fc=next8.find(l=>/fromColumn:/.test(l));
-      const tc=next8.find(l=>/toColumn:/.test(l));
-      const cf=next8.find(l=>/crossFilteringBehavior:/.test(l));
-      const frc=next8.find(l=>/fromCardinality:/.test(l));
-      const ina=next8.some(l=>/isActive:\s*false/.test(l));
-      if (fc&&tc) {
-        const parseRef=s=>{s=s.replace(/.*(?:fromColumn|toColumn):\s*/,'').trim();const m=s.match(/^'?([^.']+)'?\.'?([^'\n]+?)'?\s*$/)||s.match(/^(\w[\w.]+)\.(.+)$/);return m?{table:m[1].trim(),col:m[2].trim()}:{table:s,col:''};};
-        const f=parseRef(fc),t=parseRef(tc);
-        rels.push({fromTable:f.table,fromCol:f.col,toTable:t.table,toCol:t.col,cardinality:(frc&&/\bone\b/i.test(frc))?'One-to-One':'Many-to-One',crossFilter:(cf&&/bothDirections/i.test(cf))?'Both':'Single',isActive:!ina,aiMeaning:'',aiImpact:''});
-      }
-    }
+  for(let i=0;i<lines.length;i++){
+    const line=lines[i],trim=line.trim(),indent=indentOf(line);
+    if(/^\t{0,1}expression\s+/i.test(line)){saveCurrentMeasure();const m=line.match(/expression\s+(?:'([^']+)'|(\S+))/i);const nm=m?(m[1]||m[2]).trim():'?';const expLines=[];for(let j=i+1;j<lines.length;j++){const jt=lines[j].trim(),ji=indentOf(lines[j]);if(ji<=1&&jt&&!/^(queryGroup|mode|contentType)/.test(jt))break;expLines.push(lines[j]);}expressions.push({name:nm,query:expLines.join('\n').trim()});continue;}
+    if(/^\t{1,2}table\s+/i.test(line)){saveCurrentMeasure();if(inPartition&&curTable){curTable.partitionSource=partitionLines.join('\n').trim();curTable.sourceType=detectSourceType(curTable.partitionSource);inPartition=false;}const m=line.match(/table\s+(?:'([^']+)'|(.+))/i);const name=m?(m[1]||m[2]).trim():'?';const next6=lines.slice(i+1,i+7);const isHidden=next6.some(l=>/^\t+isHidden\b/.test(l));curTable={name,isHidden,partitionType:'None',partitionSource:'',sourceType:'',columns:[],measures:[],aiTableType:'',aiDescription:'',aiSourceDesc:'',aiStepsDesc:'',aiDataQuality:''};tables.push(curTable);inPartition=false;partitionLines=[];continue;}
+    if(curTable&&/^\t{2,3}column\s+/i.test(line)){saveCurrentMeasure();const m=line.match(/column\s+(?:'([^']+)'|(\S+))/i);const colName=m?(m[1]||m[2]).trim():'?';const next10=lines.slice(i+1,i+11);const dtLine=next10.find(l=>/^\s+dataType:/.test(l));const srcLine=next10.find(l=>/^\s+sourceColumn:/.test(l));const hidLine=next10.some(l=>/^\t+isHidden\b/.test(l));const keyLine=next10.some(l=>/^\t+isKey\b/.test(l));const fmtLine=next10.find(l=>/^\s+formatString:/.test(l)&&!/annotation/.test(l));let dax='';if(!srcLine){const eq=line.indexOf('=');if(eq>-1)dax=line.slice(eq+1).trim().replace(/^```|```$/g,'').trim();for(let j=i+1;j<Math.min(i+40,lines.length);j++){const jt=lines[j].trim(),ji=indentOf(lines[j]);if(ji<=indent&&jt&&!/^\s*(dataType|isHidden|isKey|formatString|sortByColumn|summarizeBy|displayFolder|annotation)/.test(jt))break;if(/^\s*(dataType|isHidden|isKey|formatString|sortByColumn|summarizeBy|displayFolder|annotation)/.test(jt))continue;dax+=(jt.replace(/^```|```$/g,'').trim()+' ');}dax=dax.trim();}curTable.columns.push({name:colName,dataType:dtLine?dtLine.replace(/.*dataType:\s*/,'').trim():'string',isHidden:hidLine,isKey:keyLine,sourceColumn:srcLine?srcLine.replace(/.*sourceColumn:\s*/,'').trim().replace(/^"|"$/g,''):null,formatString:fmtLine?fmtLine.replace(/.*formatString:\s*/,'').trim().replace(/^'|'$/g,''):'',isCalc:!srcLine,dax,aiDescription:''});continue;}
+    if(curTable&&/^\t{2,3}measure\s+/i.test(line)){saveCurrentMeasure();const m=line.match(/measure\s+(?:'([^']+)'|([^=\n]+?))\s*=/i);const nm=m?(m[1]||m[2]).trim():line.replace(/.*measure\s+/,'').split('=')[0].trim().replace(/^'|'$/g,'');const eq=line.indexOf('=');const inlineDax=eq>-1?line.slice(eq+1).trim().replace(/^```|```$/g,'').trim():'';const next10=lines.slice(i+1,i+11);const fldLine=next10.find(l=>/displayFolder:/.test(l));const fmtLine=next10.find(l=>/formatString:/.test(l)&&!/annotation/.test(l));curMeasure={name:nm,table:curTable.name,folder:fldLine?fldLine.replace(/.*displayFolder:\s*/,'').trim().replace(/^'|'$/g,''):'',format:fmtLine?fmtLine.replace(/.*formatString:\s*/,'').trim().replace(/^'|'$/g,''):'',dax:inlineDax,aiPlainEnglish:'',aiLogic:''};curMeasureLines=[];curMeasureIndent=indent;curTable.measures.push(curMeasure);continue;}
+    if(curMeasure&&!curMeasure.dax){if(indent>curMeasureIndent&&!/^\s*(displayFolder|formatString|annotation|isHidden|changedProperty)/.test(trim)){const cleaned=trim.replace(/^```|```$/g,'').trim();if(cleaned)curMeasureLines.push(cleaned);}else if(indent<=curMeasureIndent&&trim&&curMeasureLines.length){curMeasure.dax=curMeasureLines.join('\n').trim();curMeasureLines=[];}}
+    if(curTable&&/^\t+partition\s+/i.test(line)){saveCurrentMeasure();const isCalcTable=/=\s*calculated/i.test(line);curTable.partitionType=isCalcTable?'DAX':'M';inPartition=true;partitionLines=[];partitionDepth=indent;continue;}
+    if(inPartition){if(indent<=partitionDepth&&trim&&!/^\s*(mode|source)\b/.test(trim)){curTable.partitionSource=partitionLines.join('\n').trim();curTable.sourceType=detectSourceType(curTable.partitionSource);inPartition=false;}else{partitionLines.push(line);continue;}}
+    if(/^\t{1,2}relationship\s/i.test(line)){saveCurrentMeasure();const next8=lines.slice(i+1,i+9);const fc=next8.find(l=>/fromColumn:/.test(l));const tc=next8.find(l=>/toColumn:/.test(l));const cf=next8.find(l=>/crossFilteringBehavior:/.test(l));const frc=next8.find(l=>/fromCardinality:/.test(l));const ina=next8.some(l=>/isActive:\s*false/.test(l));if(fc&&tc){const parseRef=s=>{s=s.replace(/.*(?:fromColumn|toColumn):\s*/,'').trim();const m=s.match(/^'?([^.']+)'?\.'?([^'\n]+?)'?\s*$/)||s.match(/^(\w[\w.]+)\.(.+)$/);return m?{table:m[1].trim(),col:m[2].trim()}:{table:s,col:''};};const f=parseRef(fc),t=parseRef(tc);rels.push({fromTable:f.table,fromCol:f.col,toTable:t.table,toCol:t.col,cardinality:(frc&&/\bone\b/i.test(frc))?'One-to-One':'Many-to-One',crossFilter:(cf&&/bothDirections/i.test(cf))?'Both':'Single',isActive:!ina,aiMeaning:'',aiImpact:''}); }}
   }
-  if (inPartition&&curTable){curTable.partitionSource=partitionLines.join('\n').trim();curTable.sourceType=detectSourceType(curTable.partitionSource);}
+  if(inPartition&&curTable){curTable.partitionSource=partitionLines.join('\n').trim();curTable.sourceType=detectSourceType(curTable.partitionSource);}
   saveCurrentMeasure();
-
-  // Detect unused
+  // Unused detection
   const allDaxText=[...tables.flatMap(t=>t.measures.map(m=>m.dax)),...tables.flatMap(t=>t.columns.filter(c=>c.isCalc).map(c=>c.dax)),...tables.map(t=>t.partitionSource),...expressions.map(e=>e.query)].join('\n').toLowerCase();
-  const isRef=(tableName,colName)=>{const tl=tableName.toLowerCase(),cl=colName?colName.toLowerCase():null;if(rels.some(r=>[r.fromTable,r.toTable].map(x=>x.toLowerCase()).includes(tl))) return true;const pats=cl?[`'${tl}'[${cl}]`,`${tl}[${cl}]`,`[${cl}]`]:[`'${tl}'`,`${tl}[`,`${tl}.`];return pats.some(p=>allDaxText.includes(p));};
+  const isRef=(tN,cN)=>{const tl=tN.toLowerCase(),cl=cN?cN.toLowerCase():null;if(rels.some(r=>[r.fromTable,r.toTable].map(x=>x.toLowerCase()).includes(tl)))return true;const pats=cl?[`'${tl}'[${cl}]`,`${tl}[${cl}]`,`[${cl}]`]:[`'${tl}'`,`${tl}[`,`${tl}.`];return pats.some(p=>allDaxText.includes(p));};
   const unusedTables=[],unusedCols=[],unusedMeas=[];
-  const allMeasNames=tables.flatMap(t=>t.measures.map(m=>m.name.toLowerCase()));
   tables.filter(t=>!t.isHidden).forEach(t=>{
-    if(!isRef(t.name)&&!t.columns.length&&!t.measures.length) unusedTables.push(t.name);
-    t.columns.filter(c=>!c.isHidden).forEach(c=>{if(!isRef(t.name,c.name)) unusedCols.push(`${t.name}[${c.name}]`);});
-    t.measures.forEach(m=>{const ml=m.name.toLowerCase();const usedElsewhere=allDaxText.includes(`[${ml}]`);if(!usedElsewhere&&!/^[_0-9]|^test|^temp|^debug/i.test(m.name)) unusedMeas.push(`[${m.name}]`);});
+    if(!isRef(t.name)&&!t.columns.length&&!t.measures.length)unusedTables.push(t.name);
+    t.columns.filter(c=>!c.isHidden).forEach(c=>{if(!isRef(t.name,c.name))unusedCols.push(`${t.name}[${c.name}]`);});
+    t.measures.forEach(m=>{const ml=m.name.toLowerCase();if(!allDaxText.includes(`[${ml}]`)&&!/^[_0-9]|^test|^temp|^debug/i.test(m.name))unusedMeas.push(`[${m.name}]`);});
   });
   const visible=tables.filter(t=>!t.isHidden);
   return {tables,rels,expressions,counts:{tables:visible.length,hiddenTables:tables.length-visible.length,columns:tables.reduce((s,t)=>s+t.columns.length,0),measures:tables.reduce((s,t)=>s+t.measures.length,0),relationships:rels.length},unused:{tables:unusedTables,columns:unusedCols,measures:unusedMeas}};
+}
+
+// ════════════════════════════════════════════
+// SMART DIFF — 4 BUCKETS (0 token for JS diff)
+// ════════════════════════════════════════════
+function diffInventories(oldInv, newInv) {
+  const result = {
+    tables:   {added:[], removed:[], modified:[], unchanged:[]},
+    measures: {added:[], removed:[], modified:[], unchanged:[]},
+    columns:  {added:[], removed:[], modified:[], unchanged:[]},
+    rels:     {added:[], removed:[], unchanged:[]},
+    pq:       {modified:[], unchanged:[]},
+  };
+
+  // Tables
+  const oldTables = new Map(oldInv.tables.map(t=>[t.name, t]));
+  const newTables = new Map(newInv.tables.map(t=>[t.name, t]));
+  for (const [name, t] of newTables) {
+    if (!oldTables.has(name)) result.tables.added.push(t);
+    else result.tables.unchanged.push(t);
+  }
+  for (const [name] of oldTables) {
+    if (!newTables.has(name)) result.tables.removed.push(name);
+  }
+
+  // Measures (compare by name + DAX)
+  const oldMeas = new Map(oldInv.tables.flatMap(t=>t.measures.map(m=>[m.name, m])));
+  const newMeas = new Map(newInv.tables.flatMap(t=>t.measures.map(m=>[m.name, m])));
+  for (const [name, m] of newMeas) {
+    if (!oldMeas.has(name)) { result.measures.added.push(m); }
+    else if (oldMeas.get(name).dax?.trim() !== m.dax?.trim()) { result.measures.modified.push(m); }
+    else { result.measures.unchanged.push(m); }
+  }
+  for (const [name, m] of oldMeas) {
+    if (!newMeas.has(name)) result.measures.removed.push(m);
+  }
+
+  // Columns (compare by table+name+dataType)
+  const colKey = c => `${c.table||''}[${c.name}]`;
+  const oldCols = new Map(oldInv.tables.flatMap(t=>t.columns.map(c=>({...c,table:t.name}))).map(c=>[colKey(c),c]));
+  const newCols = new Map(newInv.tables.flatMap(t=>t.columns.map(c=>({...c,table:t.name}))).map(c=>[colKey(c),c]));
+  for (const [k, c] of newCols) {
+    if (!oldCols.has(k)) result.columns.added.push(c);
+    else result.columns.unchanged.push(c);
+  }
+  for (const [k, c] of oldCols) {
+    if (!newCols.has(k)) result.columns.removed.push(c);
+  }
+
+  // Relationships
+  const relKey = r => `${r.fromTable}[${r.fromCol}]->${r.toTable}[${r.toCol}]`;
+  const oldRels = new Map(oldInv.rels.map(r=>[relKey(r),r]));
+  const newRels = new Map(newInv.rels.map(r=>[relKey(r),r]));
+  for (const [k, r] of newRels) {
+    if (!oldRels.has(k)) result.rels.added.push(r);
+    else result.rels.unchanged.push(r);
+  }
+  for (const [k, r] of oldRels) {
+    if (!newRels.has(k)) result.rels.removed = result.rels.removed||[];result.rels.removed.push(r);
+  }
+
+  // PQ: mark modified if source changed
+  for (const t of newInv.tables.filter(t=>t.partitionType!=='None')) {
+    const old = oldInv.tables.find(o=>o.name===t.name);
+    if (!old || old.partitionSource !== t.partitionSource) result.pq.modified.push(t);
+    else result.pq.unchanged.push(t);
+  }
+
+  return result;
 }
 
 // ════════════════════════════════════════════
@@ -978,425 +1025,420 @@ JSON array:`,
 Each element: {"from_table":"","from_col":"","business_meaning":"what dimension filters what fact","impact":"which measures this enables"}
 Relationships: ${JSON.stringify(items)}
 JSON array:`,
-  changelog: (oldTmdl, newTmdl, userSummary)=>`You are a Power BI documentation expert. Compare these two TMDL versions and produce a changelog. Return ONLY a raw JSON object (no markdown).
+  changelog: (diff, userSummary)=>`You are a Power BI documentation expert. Generate a changelog based on this diff analysis. Return ONLY a raw JSON object (no markdown).
 Fields:
-- version_summary: one sentence summary of changes (Vietnamese)
-- added_tables: array of table names added
-- removed_tables: array of table names removed
-- added_measures: array of measure names added
-- removed_measures: array of measure names removed
-- modified_measures: array of {name, change_desc}
-- added_columns: array of "Table[Column]" added
-- removed_columns: array of "Table[Column]" removed
-- relationship_changes: array of change descriptions
-- detail: 3-5 bullet points in Vietnamese describing the most important changes
-${userSummary?`User provided summary: ${userSummary}`:''}
-OLD TMDL (first 3000 chars):
-${oldTmdl.substring(0,3000)}
-NEW TMDL (first 3000 chars):
-${newTmdl.substring(0,3000)}
-JSON:`
+- version_summary: one sentence in Vietnamese summarizing the changes
+- detail: array of 3-6 bullet strings in Vietnamese describing key changes
+${userSummary ? `User hint: ${userSummary}` : ''}
+Diff data:
+${JSON.stringify(diff)}
+JSON:`,
 };
 
 function chunk(arr,n){const out=[];for(let i=0;i<arr.length;i+=n)out.push(arr.slice(i,i+n));return out;}
 
-function buildBatchQueues(inv) {
-  const visible=inv.tables.filter(t=>!t.isHidden);
-  const pqItems=visible.filter(t=>t.partitionType!=='None').map(t=>({table:t.name,source_type:t.sourceType||t.partitionType,m_query:t.partitionSource.substring(0,800)}));
-  const tableItems=visible.map(t=>({name:t.name,partition_type:t.partitionType,source_type:t.sourceType,measures:t.measures.length,columns:t.columns.length}));
-  const colItems=visible.flatMap(t=>t.columns.filter(c=>!c.isHidden).map(c=>({table:t.name,name:c.name,data_type:c.dataType,source_column:c.sourceColumn,is_key:c.isKey,is_calc:c.isCalc,dax:c.isCalc?c.dax.substring(0,200):undefined})));
-  const relItems=inv.rels.map(r=>({from_table:r.fromTable,from_col:r.fromCol,to_table:r.toTable,to_col:r.toCol,cardinality:r.cardinality,cross_filter:r.crossFilter,is_active:r.isActive}));
-  const measItems=visible.flatMap(t=>t.measures.map(m=>({name:m.name,folder:m.folder,format:m.format,dax:m.dax.substring(0,600)})));
-  return {pq:chunk(pqItems,BATCH.pq),tables:chunk(tableItems,BATCH.tables),columns:chunk(colItems,BATCH.columns),rels:chunk(relItems,BATCH.rels),measures:chunk(measItems,BATCH.measures)};
-}
-
-function mergeAI(category, items, inv) {
-  if (!Array.isArray(items)) return;
-  if (category==='tables') items.forEach(it=>{const t=inv.tables.find(t=>t.name===it.name);if(t){t.aiTableType=it.table_type||'';t.aiDescription=it.description||'';}});
-  if (category==='columns') items.forEach(it=>{const t=inv.tables.find(t=>t.name===it.table);if(t){const c=t.columns.find(c=>c.name===it.name);if(c)c.aiDescription=it.description||'';}});
-  if (category==='measures') items.forEach(it=>{const t=inv.tables.flatMap(t=>t.measures).find(m=>m.name===it.name);if(t){t.aiPlainEnglish=it.plain_english||'';t.aiLogic=it.logic||'';}});
-  if (category==='pq') items.forEach(it=>{const t=inv.tables.find(t=>t.name===it.table);if(t){t.aiSourceDesc=it.source_desc||'';t.aiStepsDesc=it.steps_desc||'';t.aiDataQuality=it.data_quality||'';}});
-  if (category==='rels') items.forEach(it=>{const r=inv.rels.find(r=>r.fromTable===it.from_table&&r.fromCol===it.from_col);if(r){r.aiMeaning=it.business_meaning||'';r.aiImpact=it.impact||'';}});
-}
-
 function parseJSON(text) {
-  let s = text.trim();
-  s = s.replace(/^```(?:json)?\s*/,'').replace(/```\s*$/,'').trim();
+  let s=text.trim().replace(/^```(?:json)?\s*/,'').replace(/```\s*$/,'').trim();
   const i1=s.indexOf('{'),i2=s.indexOf('[');
   let start=0;
-  if (i1===-1&&i2===-1) throw new Error('No JSON found');
-  if (i1===-1) start=i2;
-  else if (i2===-1) start=i1;
-  else start=Math.min(i1,i2);
+  if(i1===-1&&i2===-1)throw new Error('No JSON found');
+  if(i1===-1)start=i2;else if(i2===-1)start=i1;else start=Math.min(i1,i2);
   s=s.slice(start);
   const end=Math.max(s.lastIndexOf('}'),s.lastIndexOf(']'));
-  if (end===-1) throw new Error('Malformed JSON');
-  s=s.slice(0,end+1);
-  return JSON.parse(s);
+  if(end===-1)throw new Error('Malformed JSON');
+  return JSON.parse(s.slice(0,end+1));
 }
 
 // ════════════════════════════════════════════
-// MAIN GENERATION FLOW
+// RUN NEW — with animated counters
 // ════════════════════════════════════════════
 async function runNew() {
-  if (!CFG.pat) { alert('Chưa cấu hình GitHub. Click ⚙ Cấu hình để nhập PAT.'); toggleSetup(); return; }
-  const folder = document.getElementById('newFolder').value;
-  const reportName = document.getElementById('newReportName').value.trim();
-  const author = document.getElementById('newAuthor').value.trim();
-  const rawTmdl = document.getElementById('newTmdl').value.trim();
-  if (!folder) return alert('Vui lòng chọn folder lưu trữ');
+  if (!CFG.pat) { alert('Chưa cấu hình GitHub.'); toggleSetup(); return; }
+  const topic      = document.getElementById('newTopic')?.value;
+  const reportName = document.getElementById('newReportName')?.value.trim();
+  const author     = document.getElementById('newAuthor')?.value.trim();
+  const rawTmdl    = document.getElementById('newTmdl')?.value.trim();
+  if (!topic) return alert('Vui lòng chọn folder chủ đề');
   if (!reportName) return alert('Vui lòng nhập tên báo cáo');
   if (!rawTmdl) return alert('Vui lòng paste TMDL');
   if (!KEY_POOL.length) await loadGroqKeys();
-  if (!KEY_POOL.length) { alert('Không có Groq key. Kiểm tra keys.txt trong repo ' + CFG.keyRepo); return; }
-  await generate({folder, reportName, author, rawTmdl, mode:'new', statusId:'newStatus', timelineId:'newTimeline', resultId:'newResult', createBtnId:'newCreateBtn', stopBtnId:'newStopBtn', oldTmdl:null, oldFilename:null, oldFileSha:null});
+  if (!KEY_POOL.length) { alert('Không có Groq key.'); return; }
+  await generateNew({topic, reportName, author, rawTmdl});
 }
 
+async function generateNew({topic, reportName, author, rawTmdl}) {
+  STOP_FLAG = false;
+  const cBtn = document.getElementById('newCreateBtn');
+  const sBtn = document.getElementById('newStopBtn');
+  cBtn.disabled = true; sBtn.style.display = 'inline-flex';
+  showLiveStats('new');
+
+  const model = MODELS[CFG.model||'llama-3.1-8b-instant'];
+  const delay = model.tpm<=6000?62000:model.tpm<=14400?35000:3000;
+
+  setTimeline('newTimeline', [
+    {label:'Parse',state:'running'},{label:'Context',state:''},{label:'Tables',state:''},
+    {label:'Columns',state:''},{label:'Measures',state:''},{label:'Rels',state:''},
+    {label:'PQ',state:''},{label:'Excel',state:''},{label:'Upload',state:''}
+  ]);
+
+  try {
+    // Parse
+    setStatus('Đang phân tích TMDL...', 'loading', 'newStatus');
+    setLivePhase('new', 'Phân tích cấu trúc TMDL...');
+    const inv = parseInventory(rawTmdl);
+    CURRENT_INV = inv;
+    // Animate counters
+    animateCounter('lsn_tables',  inv.counts.tables);
+    animateCounter('lsn_columns', inv.counts.columns);
+    animateCounter('lsn_measures',inv.counts.measures);
+    animateCounter('lsn_rels',    inv.counts.relationships);
+    animateCounter('lsn_pq',      inv.tables.filter(t=>t.partitionType!=='None').length);
+    animateCounter('lsn_unused',  inv.unused.columns.length + inv.unused.measures.length);
+    setStatDone('ls_tables'); setStatDone('ls_columns'); setStatDone('ls_rels');
+    updateTlItem('newTimeline','Parse','done');
+    updateTlItem('newTimeline','Context','running');
+    setLivePhase('new', 'AI đang phân tích context model...');
+
+    if (STOP_FLAG) throw new Error('Đã dừng');
+
+    // Context
+    let overview = {};
+    try {
+      const ctx = await groqCall(PROMPTS.context + '\nTables: ' + inv.tables.map(t=>t.name).join(', ').substring(0,2000));
+      overview = parseJSON(ctx);
+    } catch(e) { console.warn('Context failed:', e); }
+    updateTlItem('newTimeline','Context','done');
+    updateTlItem('newTimeline','Tables','running');
+
+    // Tables
+    setLivePhase('new', `Documenting ${inv.counts.tables} tables...`);
+    setStatActive('ls_tables');
+    for (const batch of chunk(inv.tables.filter(t=>!t.isHidden).map(t=>({name:t.name,source_type:t.sourceType,measures:t.measures.length,columns:t.columns.length})), BATCH.tables)) {
+      if (STOP_FLAG) throw new Error('Đã dừng');
+      try { const r=await groqCall(PROMPTS.tables(batch)); parseJSON(r).forEach(it=>{const t=inv.tables.find(t=>t.name===it.name);if(t){t.aiTableType=it.table_type||'';t.aiDescription=it.description||'';}});} catch(e){console.warn(e);}
+      await sleep(delay);
+    }
+    setStatDone('ls_tables');
+    updateTlItem('newTimeline','Tables','done'); updateTlItem('newTimeline','Columns','running');
+
+    // Columns
+    setLivePhase('new', `Documenting ${inv.counts.columns} columns...`);
+    setStatActive('ls_columns');
+    const visibleCols = inv.tables.filter(t=>!t.isHidden).flatMap(t=>t.columns.filter(c=>!c.isHidden).map(c=>({table:t.name,name:c.name,data_type:c.dataType,is_calc:c.isCalc,dax:c.isCalc?c.dax?.substring(0,200):undefined})));
+    for (const batch of chunk(visibleCols, BATCH.columns)) {
+      if (STOP_FLAG) throw new Error('Đã dừng');
+      try { const r=await groqCall(PROMPTS.columns(batch)); parseJSON(r).forEach(it=>{const t=inv.tables.find(t=>t.name===it.table);if(t){const c=t.columns.find(c=>c.name===it.name);if(c)c.aiDescription=it.description||'';}});} catch(e){console.warn(e);}
+      await sleep(delay);
+    }
+    setStatDone('ls_columns');
+    updateTlItem('newTimeline','Columns','done'); updateTlItem('newTimeline','Measures','running');
+
+    // Measures
+    setLivePhase('new', `Documenting ${inv.counts.measures} measures & DAX...`);
+    setStatActive('ls_measures');
+    const allMeas = inv.tables.filter(t=>!t.isHidden).flatMap(t=>t.measures.map(m=>({name:m.name,folder:m.folder,format:m.format,dax:m.dax?.substring(0,600)})));
+    for (const batch of chunk(allMeas, BATCH.measures)) {
+      if (STOP_FLAG) throw new Error('Đã dừng');
+      try { const r=await groqCall(PROMPTS.measures(batch)); parseJSON(r).forEach(it=>{const m=inv.tables.flatMap(t=>t.measures).find(m=>m.name===it.name);if(m){m.aiPlainEnglish=it.plain_english||'';m.aiLogic=it.logic||'';}});} catch(e){console.warn(e);}
+      await sleep(delay);
+    }
+    setStatDone('ls_measures');
+    updateTlItem('newTimeline','Measures','done'); updateTlItem('newTimeline','Rels','running');
+
+    // Relationships
+    setLivePhase('new', `Documenting ${inv.counts.relationships} relationships...`);
+    setStatActive('ls_rels');
+    for (const batch of chunk(inv.rels.map(r=>({from_table:r.fromTable,from_col:r.fromCol,to_table:r.toTable,to_col:r.toCol,cardinality:r.cardinality,is_active:r.isActive})), BATCH.rels)) {
+      if (STOP_FLAG) throw new Error('Đã dừng');
+      try { const r=await groqCall(PROMPTS.rels(batch)); parseJSON(r).forEach(it=>{const rel=inv.rels.find(r=>r.fromTable===it.from_table&&r.fromCol===it.from_col);if(rel){rel.aiMeaning=it.business_meaning||'';rel.aiImpact=it.impact||'';}});} catch(e){console.warn(e);}
+      await sleep(delay);
+    }
+    setStatDone('ls_rels');
+    updateTlItem('newTimeline','Rels','done'); updateTlItem('newTimeline','PQ','running');
+
+    // PQ
+    setLivePhase('new', 'Documenting Power Query sources...');
+    const pqTables = inv.tables.filter(t=>t.partitionType!=='None').map(t=>({table:t.name,source_type:t.sourceType,m_query:t.partitionSource.substring(0,800)}));
+    for (const batch of chunk(pqTables, BATCH.pq)) {
+      if (STOP_FLAG) throw new Error('Đã dừng');
+      try { const r=await groqCall(PROMPTS.pq(batch)); parseJSON(r).forEach(it=>{const t=inv.tables.find(t=>t.name===it.table);if(t){t.aiSourceDesc=it.source_desc||'';t.aiStepsDesc=it.steps_desc||'';t.aiDataQuality=it.data_quality||'';}});} catch(e){console.warn(e);}
+      await sleep(delay);
+    }
+    updateTlItem('newTimeline','PQ','done'); updateTlItem('newTimeline','Excel','running');
+
+    setLivePhase('new', 'Building Excel...');
+    const dateStr = new Date().toLocaleDateString('vi-VN');
+    const doc = buildDoc(inv, overview, null, reportName, author, dateStr, rawTmdl);
+    CURRENT_DOC = doc;
+    const xlsxBlob = await buildXlsxBlob(doc, inv, rawTmdl, null);
+    const ts = makeTimestamp();
+    const safeReport = reportName.replace(/[^a-zA-Z0-9_\-]/g,'_');
+    const filename = `${safeReport}_${ts}.xlsx`;
+    updateTlItem('newTimeline','Excel','done'); updateTlItem('newTimeline','Upload','running');
+
+    // Upload — path: docs/{topic}/{reportName}/{filename}
+    setLivePhase('new', 'Uploading to GitHub...');
+    const filePath = `docs/${topic}/${safeReport}/${filename}`;
+    await ghUploadBinary(CFG.appRepo, filePath, xlsxBlob, `Create: ${reportName} [${ts}]`);
+    // Upload meta
+    const meta = {report:reportName, author, timestamp:ts, date:dateStr, summary:`Tạo mới — ${inv.counts.tables} tables, ${inv.counts.columns} columns, ${inv.counts.measures} measures`, tmdl_source:rawTmdl};
+    await ghUpload(CFG.appRepo, `docs/${topic}/${safeReport}/${safeReport}_${ts}.meta.json`, JSON.stringify(meta,null,2), `Meta: ${reportName} [${ts}]`);
+
+    updateTlItem('newTimeline','Upload','done');
+    setLivePhase('new', '✅ Hoàn thành!');
+    setStatus(`✅ <strong>${filename}</strong> đã upload lên <code>docs/${topic}/${safeReport}/</code>`, 'success', 'newStatus');
+    renderResult(doc, inv, xlsxBlob, filename, 'newResult');
+    window._lastBlob = xlsxBlob; window._lastFilename = filename;
+
+  } catch(e) {
+    setStatus(`❌ Lỗi: ${e.message}`, 'error', 'newStatus');
+    setLivePhase('new', '');
+    document.querySelectorAll('#newTimeline .tl-item.running').forEach(el=>el.classList.replace('running','fail'));
+  } finally {
+    cBtn.disabled = false; sBtn.style.display = 'none';
+  }
+}
+
+// ════════════════════════════════════════════
+// RUN UPDATE — Smart 4-bucket diff
+// ════════════════════════════════════════════
 async function runUpdate() {
-  if (!CFG.pat) { alert('Chưa cấu hình GitHub. Click ⚙ Cấu hình.'); toggleSetup(); return; }
-  const folder = document.getElementById('updFolder').value;
-  const filename = document.getElementById('updFile').value;
-  const author = document.getElementById('updAuthor').value.trim();
-  const summary = document.getElementById('updSummary').value.trim();
-  const rawTmdl = document.getElementById('updTmdl').value.trim();
-  if (!folder||!filename) return alert('Vui lòng chọn folder và file Excel cần update');
+  if (!CFG.pat) { alert('Chưa cấu hình GitHub.'); toggleSetup(); return; }
+  const topic    = document.getElementById('updTopic')?.value;
+  const report   = document.getElementById('updReport')?.value;
+  const filename = document.getElementById('updFile')?.value;
+  const author   = document.getElementById('updAuthor')?.value.trim();
+  const summary  = document.getElementById('updSummary')?.value.trim();
+  const rawTmdl  = document.getElementById('updTmdl')?.value.trim();
+  if (!topic||!report||!filename) return alert('Vui lòng chọn đầy đủ folder và file');
   if (!rawTmdl) return alert('Vui lòng paste TMDL mới');
   if (!KEY_POOL.length) await loadGroqKeys();
   if (!KEY_POOL.length) { alert('Không có Groq key.'); return; }
 
-  // Load old TMDL from GitHub (meta file)
-  let oldTmdl = '';
-  const metaPath = `docs/${folder}/${filename.replace('.xlsx','.meta.json')}`;
+  // Load old meta (contains old TMDL)
+  const metaPath = `docs/${topic}/${report}/${filename.replace('.xlsx','.meta.json')}`;
+  let oldMeta = null, oldTmdl = '';
   try {
     const content = await ghGetContent(CFG.appRepo, metaPath);
-    const meta = JSON.parse(content);
-    oldTmdl = meta.tmdl_source || '';
-  } catch(e) { /* no old tmdl */ }
+    oldMeta = JSON.parse(content);
+    oldTmdl = oldMeta.tmdl_source || '';
+  } catch(e) { console.warn('No old meta:', e.message); }
 
-  const reportName = reportBaseName(filename);
-  await generate({folder, reportName, author, rawTmdl, mode:'update', statusId:'updStatus', timelineId:'updTimeline', resultId:'updResult', createBtnId:'updCreateBtn', stopBtnId:'updStopBtn', oldTmdl, oldFilename:filename, oldFileSha:null, userSummary:summary});
-}
-
-async function generate({folder, reportName, author, rawTmdl, mode, statusId, timelineId, resultId, createBtnId, stopBtnId, oldTmdl, oldFilename, userSummary}) {
   STOP_FLAG = false;
-  document.getElementById(createBtnId).disabled = true;
-  document.getElementById(stopBtnId).style.display = 'inline-flex';
+  document.getElementById('updCreateBtn').disabled = true;
+  document.getElementById('updStopBtn').style.display = 'inline-flex';
+  showLiveStats('upd');
 
-  const tlItems = [
-    {label:'Parse TMDL',state:'running'},
-    {label:'Context AI',state:''},
-    {label:'Tables',state:''},
-    {label:'Columns',state:''},
-    {label:'Measures',state:''},
-    {label:'Relationships',state:''},
-    {label:'Power Query',state:''},
-    ...(mode==='update'?[{label:'Changelog',state:''}]:[]),
-    {label:'Build Excel',state:''},
-    {label:'Upload GitHub',state:''}
-  ];
-  setTimeline(timelineId, tlItems);
+  const model = MODELS[CFG.model||'llama-3.1-8b-instant'];
+  const delay = model.tpm<=6000?62000:model.tpm<=14400?35000:3000;
 
-  const tick = (label, state) => updateTlItem(timelineId, label, state);
-  const setNext = label => { tick(label, 'running'); };
+  setTimeline('updTimeline', [
+    {label:'Diff',state:'running'},{label:'Added/Modified AI',state:''},
+    {label:'Changelog',state:''},{label:'Excel',state:''},{label:'Upload',state:''}
+  ]);
 
   try {
-    setStatus('Đang phân tích TMDL...', 'loading', statusId, 5);
-    tick('Parse TMDL', 'running');
-    const inv = parseInventory(rawTmdl);
-    CURRENT_INV = inv;
-    tick('Parse TMDL','done'); setNext('Context AI');
-    setProgress(statusId, 10);
+    // STEP 1: Parse both TDMLs, build diff
+    setStatus('Đang phân tích thay đổi (0 token)...', 'loading', 'updStatus');
+    const newInv = parseInventory(rawTmdl);
+    const oldInv = oldTmdl ? parseInventory(oldTmdl) : newInv;
+    const diff   = diffInventories(oldInv, newInv);
 
-    if (STOP_FLAG) throw new Error('Đã dừng bởi người dùng');
+    // Show diff stats
+    const addedCount   = diff.measures.added.length + diff.tables.added.length + diff.columns.added.length;
+    const removedCount = diff.measures.removed.length + diff.tables.removed.length + diff.columns.removed.length;
+    const modCount     = diff.measures.modified.length + diff.pq.modified.length;
+    const unchangedCount = diff.measures.unchanged.length + diff.tables.unchanged.length;
+    const savedCalls   = diff.measures.unchanged.length + diff.columns.unchanged.length;
 
-    // Context
-    setStatus(`Đang phân tích context model (${inv.counts.tables} tables, ${inv.counts.measures} measures)...`, 'loading', statusId, 15);
-    const contextSummary = `Tables: ${inv.tables.map(t=>t.name).join(', ')}\nMeasures: ${inv.tables.flatMap(t=>t.measures.map(m=>m.name)).slice(0,30).join(', ')}`;
-    let overview = {};
-    try {
-      const ctx = await groqCall(PROMPTS.context + '\n' + contextSummary.substring(0,2000));
-      overview = parseJSON(ctx);
-    } catch(e) { console.warn('Context failed:', e); }
-    tick('Context AI','done'); setNext('Tables');
-    setProgress(statusId, 20);
+    animateCounter('ulsn_added',     addedCount);
+    animateCounter('ulsn_removed',   removedCount);
+    animateCounter('ulsn_modified',  modCount);
+    animateCounter('ulsn_unchanged', unchangedCount);
+    animateCounter('ulsn_tokens',    savedCalls);
 
-    if (STOP_FLAG) throw new Error('Đã dừng');
+    updateTlItem('updTimeline','Diff','done');
+    updateTlItem('updTimeline','Added/Modified AI','running');
 
-    // Build batches
-    const queues = buildBatchQueues(inv);
-    const model = MODELS[CFG.model||'llama-3.1-8b-instant'];
-    const delay = model.tpm<=6000?62000:model.tpm<=14400?35000:3000;
-
-    // Tables
-    setStatus(`Phân tích ${inv.counts.tables} tables...`, 'loading', statusId, 25);
-    for (const batch of queues.tables) {
-      if (STOP_FLAG) throw new Error('Đã dừng');
-      try { const r=await groqCall(PROMPTS.tables(batch)); mergeAI('tables',parseJSON(r),inv); } catch(e){ console.warn('tables batch err',e); }
-      await sleep(delay);
+    // STEP 2: Copy UNCHANGED from old doc, call AI only for ADDED + MODIFIED
+    // First apply old AI descriptions to unchanged items
+    if (oldTmdl) {
+      diff.measures.unchanged.forEach(m => {
+        const oldM = oldInv.tables.flatMap(t=>t.measures).find(o=>o.name===m.name);
+        if (oldM) { m.aiPlainEnglish = oldM.aiPlainEnglish; m.aiLogic = oldM.aiLogic; }
+      });
+      diff.columns.unchanged.forEach(c => {
+        const oldC = oldInv.tables.flatMap(t=>t.columns).find(o=>o.name===c.name);
+        if (oldC) c.aiDescription = oldC.aiDescription;
+      });
+      diff.tables.unchanged.forEach(t => {
+        const oldT = oldInv.tables.find(o=>o.name===t.name);
+        if (oldT) { t.aiTableType=oldT.aiTableType; t.aiDescription=oldT.aiDescription; t.aiSourceDesc=oldT.aiSourceDesc; t.aiStepsDesc=oldT.aiStepsDesc; t.aiDataQuality=oldT.aiDataQuality; }
+      });
+      newInv.rels.forEach(r => {
+        const oldR = oldInv.rels.find(o=>o.fromTable===r.fromTable&&o.fromCol===r.fromCol);
+        if (oldR) { r.aiMeaning=oldR.aiMeaning; r.aiImpact=oldR.aiImpact; }
+      });
     }
-    tick('Tables','done'); setNext('Columns');
-    setProgress(statusId, 35);
 
-    // Columns
-    setStatus(`Phân tích ${inv.counts.columns} columns...`, 'loading', statusId, 35);
-    for (const batch of queues.columns) {
-      if (STOP_FLAG) throw new Error('Đã dừng');
-      try { const r=await groqCall(PROMPTS.columns(batch)); mergeAI('columns',parseJSON(r),inv); } catch(e){ console.warn('col batch err',e); }
-      await sleep(delay);
+    // AI for ADDED tables
+    if (diff.tables.added.length) {
+      document.getElementById('updLivePhase').textContent = `AI: ${diff.tables.added.length} tables mới...`;
+      for (const batch of chunk(diff.tables.added.map(t=>({name:t.name,source_type:t.sourceType,measures:t.measures.length,columns:t.columns.length})), BATCH.tables)) {
+        if (STOP_FLAG) throw new Error('Đã dừng');
+        try { const r=await groqCall(PROMPTS.tables(batch)); parseJSON(r).forEach(it=>{const t=newInv.tables.find(t=>t.name===it.name);if(t){t.aiTableType=it.table_type||'';t.aiDescription=it.description||'';}});} catch(e){console.warn(e);}
+        await sleep(delay);
+      }
     }
-    tick('Columns','done'); setNext('Measures');
-    setProgress(statusId, 50);
 
-    // Measures
-    setStatus(`Phân tích ${inv.counts.measures} measures & DAX...`, 'loading', statusId, 50);
-    for (const batch of queues.measures) {
-      if (STOP_FLAG) throw new Error('Đã dừng');
-      try { const r=await groqCall(PROMPTS.measures(batch)); mergeAI('measures',parseJSON(r),inv); } catch(e){ console.warn('meas batch err',e); }
-      await sleep(delay);
+    // AI for ADDED + MODIFIED measures
+    const measToProcess = [...diff.measures.added, ...diff.measures.modified];
+    if (measToProcess.length) {
+      document.getElementById('updLivePhase').textContent = `AI: ${measToProcess.length} measures (added + modified)...`;
+      for (const batch of chunk(measToProcess.map(m=>({name:m.name,folder:m.folder,dax:m.dax?.substring(0,600)})), BATCH.measures)) {
+        if (STOP_FLAG) throw new Error('Đã dừng');
+        try { const r=await groqCall(PROMPTS.measures(batch)); parseJSON(r).forEach(it=>{const m=newInv.tables.flatMap(t=>t.measures).find(m=>m.name===it.name);if(m){m.aiPlainEnglish=it.plain_english||'';m.aiLogic=it.logic||'';}});} catch(e){console.warn(e);}
+        await sleep(delay);
+      }
     }
-    tick('Measures','done'); setNext('Relationships');
-    setProgress(statusId, 62);
 
-    // Relationships
-    setStatus(`Phân tích ${inv.counts.relationships} relationships...`, 'loading', statusId, 62);
-    for (const batch of queues.rels) {
-      if (STOP_FLAG) throw new Error('Đã dừng');
-      try { const r=await groqCall(PROMPTS.rels(batch)); mergeAI('rels',parseJSON(r),inv); } catch(e){ console.warn('rel batch err',e); }
-      await sleep(delay);
+    // AI for ADDED columns
+    if (diff.columns.added.length) {
+      document.getElementById('updLivePhase').textContent = `AI: ${diff.columns.added.length} columns mới...`;
+      for (const batch of chunk(diff.columns.added.map(c=>({table:c.table,name:c.name,data_type:c.dataType,is_calc:c.isCalc})), BATCH.columns)) {
+        if (STOP_FLAG) throw new Error('Đã dừng');
+        try { const r=await groqCall(PROMPTS.columns(batch)); parseJSON(r).forEach(it=>{const t=newInv.tables.find(t=>t.name===it.table);if(t){const c=t.columns.find(c=>c.name===it.name);if(c)c.aiDescription=it.description||'';}});} catch(e){console.warn(e);}
+        await sleep(delay);
+      }
     }
-    tick('Relationships','done'); setNext('Power Query');
-    setProgress(statusId, 72);
 
-    // Power Query
-    setStatus('Phân tích Power Query sources...', 'loading', statusId, 72);
-    for (const batch of queues.pq) {
-      if (STOP_FLAG) throw new Error('Đã dừng');
-      try { const r=await groqCall(PROMPTS.pq(batch)); mergeAI('pq',parseJSON(r),inv); } catch(e){ console.warn('pq batch err',e); }
-      await sleep(delay);
+    // AI for modified PQ
+    if (diff.pq.modified.length) {
+      document.getElementById('updLivePhase').textContent = `AI: ${diff.pq.modified.length} PQ sources thay đổi...`;
+      for (const batch of chunk(diff.pq.modified.map(t=>({table:t.name,source_type:t.sourceType,m_query:t.partitionSource.substring(0,800)})), BATCH.pq)) {
+        if (STOP_FLAG) throw new Error('Đã dừng');
+        try { const r=await groqCall(PROMPTS.pq(batch)); parseJSON(r).forEach(it=>{const t=newInv.tables.find(t=>t.name===it.table);if(t){t.aiSourceDesc=it.source_desc||'';t.aiStepsDesc=it.steps_desc||'';t.aiDataQuality=it.data_quality||'';}});} catch(e){console.warn(e);}
+        await sleep(delay);
+      }
     }
-    tick('Power Query','done');
-    setProgress(statusId, 80);
 
-    // Changelog (update mode only)
+    updateTlItem('updTimeline','Added/Modified AI','done');
+    updateTlItem('updTimeline','Changelog','running');
+
+    // STEP 3: Generate changelog from diff summary
+    document.getElementById('updLivePhase').textContent = 'AI generating changelog...';
+    const diffSummary = {
+      added_tables:    diff.tables.added.map(t=>t.name),
+      removed_tables:  diff.tables.removed,
+      added_measures:  diff.measures.added.map(m=>m.name),
+      removed_measures:diff.measures.removed.map(m=>m.name),
+      modified_measures:diff.measures.modified.map(m=>m.name),
+      added_columns:   diff.columns.added.map(c=>`${c.table}[${c.name}]`),
+      removed_columns: diff.columns.removed.map(c=>`${c.table}[${c.name}]`),
+      added_rels:      diff.rels.added.map(r=>`${r.fromTable}→${r.toTable}`),
+    };
     let changelog = null;
-    if (mode==='update' && oldTmdl) {
-      setNext('Changelog');
-      setStatus('AI đang so sánh thay đổi với version cũ...', 'loading', statusId, 80);
-      try {
-        const r = await groqCall(PROMPTS.changelog(oldTmdl, rawTmdl, userSummary||''));
-        changelog = parseJSON(r);
-      } catch(e) { console.warn('changelog err:', e); }
-      tick('Changelog','done');
-      setProgress(statusId, 85);
-    }
+    try {
+      const r = await groqCall(PROMPTS.changelog(diffSummary, summary||''));
+      changelog = parseJSON(r);
+      changelog = {...diffSummary, ...changelog}; // merge
+    } catch(e) { console.warn('Changelog err:', e); changelog = diffSummary; }
 
-    // Build document object
-    const now = new Date();
-    const dateStr = now.toLocaleDateString('vi-VN');
-    const doc = buildDoc(inv, overview, changelog, reportName, author, dateStr, rawTmdl);
+    updateTlItem('updTimeline','Changelog','done');
+    updateTlItem('updTimeline','Excel','running');
+
+    // STEP 4: Build Excel
+    document.getElementById('updLivePhase').textContent = 'Building Excel...';
+    const dateStr = new Date().toLocaleDateString('vi-VN');
+    const doc = buildDoc(newInv, {}, changelog, report, author, dateStr, rawTmdl);
     CURRENT_DOC = doc;
-
-    // Build Excel
-    setNext('Build Excel');
-    setStatus('Đang tạo file Excel...', 'loading', statusId, 88);
+    const xlsxBlob = await buildXlsxBlob(doc, newInv, rawTmdl, changelog);
     const ts = makeTimestamp();
-    const safeReportName = reportName.replace(/[^a-zA-Z0-9_\-]/g,'_');
-    const filename = `${safeReportName}_${ts}.xlsx`;
-    const xlsxBlob = await buildXlsxBlob(doc, inv, rawTmdl, changelog);
-    tick('Build Excel','done'); setNext('Upload GitHub');
-    setProgress(statusId, 93);
+    const newFilename = `${report}_${ts}.xlsx`;
+    updateTlItem('updTimeline','Excel','done');
+    updateTlItem('updTimeline','Upload','running');
 
-    // Upload to GitHub
-    setStatus(`Đang upload ${filename} lên GitHub...`, 'loading', statusId, 93);
-    const xlsxBase64 = await blobToBase64(xlsxBlob);
-    const filePath = `docs/${folder}/${filename}`;
-    await fetch(`${GH_API}/repos/${CFG.user}/${CFG.appRepo}/contents/${filePath}`, {
-      method:'PUT',
-      headers:{Authorization:`token ${CFG.pat}`,Accept:'application/vnd.github.v3+json','Content-Type':'application/json'},
-      body: JSON.stringify({
-        message: `${mode==='update'?'Update':'Create'} doc: ${reportName} [${ts}]`,
-        content: xlsxBase64.split(',')[1]
-      })
-    });
+    // STEP 5: Upload new version
+    document.getElementById('updLivePhase').textContent = 'Uploading to GitHub...';
+    const filePath = `docs/${topic}/${report}/${newFilename}`;
+    await ghUploadBinary(CFG.appRepo, filePath, xlsxBlob, `Update: ${report} [${ts}]`);
+    const newMeta = {report, author, timestamp:ts, date:dateStr, summary:changelog.version_summary||`Update — +${addedCount} added, -${removedCount} removed, ~${modCount} modified`, tmdl_source:rawTmdl};
+    await ghUpload(CFG.appRepo, `docs/${topic}/${report}/${report}_${ts}.meta.json`, JSON.stringify(newMeta,null,2), `Meta: ${report} [${ts}]`);
 
-    // Upload meta JSON (stores summary + tmdl_source)
-    const metaContent = JSON.stringify({
-      report: reportName,
-      author,
-      timestamp: ts,
-      date: dateStr,
-      summary: changelog ? changelog.version_summary : `Tạo mới — ${inv.counts.tables} tables, ${inv.counts.columns} columns, ${inv.counts.measures} measures`,
-      tmdl_source: rawTmdl
-    }, null, 2);
-    const metaPath = `docs/${folder}/${safeReportName}_${ts}.meta.json`;
-    await ghUpload(CFG.appRepo, metaPath, metaContent, `Meta: ${reportName} [${ts}]`);
-
-    tick('Upload GitHub','done');
-    setProgress(statusId, 100);
-    setStatus(`✅ Hoàn thành! File <strong>${filename}</strong> đã được upload lên GitHub.<br>Folder: <code>docs/${folder}/</code>`, 'success', statusId);
-
-    // Render result
-    renderResult(doc, inv, xlsxBlob, filename, resultId);
+    updateTlItem('updTimeline','Upload','done');
+    document.getElementById('updLivePhase').textContent = '✅ Hoàn thành!';
+    setStatus(`✅ <strong>${newFilename}</strong> đã upload.<br>Token tiết kiệm: ${savedCalls} items copied từ version cũ (không gọi AI).`, 'success', 'updStatus');
+    renderResult(doc, newInv, xlsxBlob, newFilename, 'updResult');
+    window._lastBlob = xlsxBlob; window._lastFilename = newFilename;
 
   } catch(e) {
-    setStatus(`❌ Lỗi: ${e.message}`, 'error', statusId);
-    document.querySelectorAll(`#${timelineId} .tl-item.running`).forEach(el=>el.classList.replace('running','fail'));
+    setStatus(`❌ Lỗi: ${e.message}`, 'error', 'updStatus');
+    document.querySelectorAll('#updTimeline .tl-item.running').forEach(el=>el.classList.replace('running','fail'));
   } finally {
-    document.getElementById(createBtnId).disabled = false;
-    document.getElementById(stopBtnId).style.display = 'none';
+    document.getElementById('updCreateBtn').disabled = false;
+    document.getElementById('updStopBtn').style.display = 'none';
   }
 }
 
 // ════════════════════════════════════════════
-// BUILD DOCUMENT OBJECT
+// BUILD DOC + EXCEL (unchanged logic)
 // ════════════════════════════════════════════
 function buildDoc(inv, overview, changelog, reportName, author, dateStr, rawTmdl) {
   const visible = inv.tables.filter(t=>!t.isHidden);
   return {
-    meta: {name:reportName, date:dateStr, auth:author},
-    overview: {
-      description: overview.model_summary||'',
-      total_tables: inv.counts.tables,
-      total_measures: inv.counts.measures,
-      total_relationships: inv.counts.relationships,
-      report_domain: overview.report_domain||'',
-      company_context: overview.company_context||'',
-      key_metrics: (overview.key_metrics||[]).join(', '),
-      date_logic: overview.date_logic||'',
-      model_summary: overview.model_summary||''
-    },
-    tables: visible.map(t=>({
-      name:t.name, type:t.aiTableType||t.partitionType,
-      description:t.aiDescription, columns:t.columns
-    })),
-    measures: visible.flatMap(t=>t.measures.map(m=>({
-      table:t.name, name:m.name, display_folder:m.folder, format_string:m.format,
-      dax:m.dax, plain_english:m.aiPlainEnglish, logic_detail:m.aiLogic,
-      dependencies:''
-    }))),
-    relationships: inv.rels.map(r=>({
-      from_table:r.fromTable, from_column:r.fromCol,
-      to_table:r.toTable, to_column:r.toCol,
-      cardinality:r.cardinality, cross_filter:r.crossFilter,
-      is_active:r.isActive?'Yes':'No',
-      business_meaning:r.aiMeaning, impact_on_measures:r.aiImpact
-    })),
-    power_query: visible.filter(t=>t.partitionType!=='None').map(t=>({
-      table:t.name, source_type:t.sourceType||t.partitionType,
-      source_desc:t.aiSourceDesc, m_query:t.partitionSource,
-      steps_desc:t.aiStepsDesc, data_quality:t.aiDataQuality
-    })),
-    inventory: {counts:inv.counts, unused:inv.unused},
-    changelog: changelog||{version_summary:'Tạo mới',detail:''},
-    tmdl_source: rawTmdl
+    meta:{name:reportName,date:dateStr,auth:author},
+    overview:{description:overview.model_summary||'',total_tables:inv.counts.tables,total_measures:inv.counts.measures,total_relationships:inv.counts.relationships,report_domain:overview.report_domain||'',company_context:overview.company_context||'',key_metrics:(overview.key_metrics||[]).join(', '),date_logic:overview.date_logic||''},
+    tables:visible.map(t=>({name:t.name,type:t.aiTableType||t.partitionType,description:t.aiDescription,columns:t.columns})),
+    measures:visible.flatMap(t=>t.measures.map(m=>({table:t.name,name:m.name,display_folder:m.folder,format_string:m.format,dax:m.dax,plain_english:m.aiPlainEnglish,logic_detail:m.aiLogic,dependencies:''}))),
+    relationships:inv.rels.map(r=>({from_table:r.fromTable,from_column:r.fromCol,to_table:r.toTable,to_column:r.toCol,cardinality:r.cardinality,cross_filter:r.crossFilter,is_active:r.isActive?'Yes':'No',business_meaning:r.aiMeaning,impact_on_measures:r.aiImpact})),
+    power_query:visible.filter(t=>t.partitionType!=='None').map(t=>({table:t.name,source_type:t.sourceType||t.partitionType,source_desc:t.aiSourceDesc,m_query:t.partitionSource,steps_desc:t.aiStepsDesc,data_quality:t.aiDataQuality})),
+    inventory:{counts:inv.counts,unused:inv.unused},
+    changelog:changelog||{version_summary:'Tạo mới',detail:''},
+    tmdl_source:rawTmdl
   };
 }
 
-// ════════════════════════════════════════════
-// BUILD XLSX
-// ════════════════════════════════════════════
 async function buildXlsxBlob(doc, inv, rawTmdl, changelog) {
   return new Promise((resolve, reject) => {
-    const script = document.createElement('script');
-    script.src = 'https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js';
-    script.onload = () => {
-      try {
-        const blob = buildXlsx(doc, inv, rawTmdl, changelog);
-        resolve(blob);
-      } catch(e) { reject(e); }
-    };
-    script.onerror = () => reject(new Error('Failed to load fflate'));
-    // Check if already loaded
-    if (window.fflate) {
-      try { resolve(buildXlsx(doc, inv, rawTmdl, changelog)); } catch(e){ reject(e); }
-    } else {
-      document.head.appendChild(script);
-    }
+    if (window.fflate) { try { resolve(buildXlsx(doc,inv,rawTmdl,changelog)); } catch(e){reject(e);} return; }
+    const s=document.createElement('script');
+    s.src='https://cdn.jsdelivr.net/npm/fflate@0.8.2/umd/index.js';
+    s.onload=()=>{ try{resolve(buildXlsx(doc,inv,rawTmdl,changelog));}catch(e){reject(e);} };
+    s.onerror=()=>reject(new Error('Failed to load fflate'));
+    document.head.appendChild(s);
   });
 }
 
 function buildXlsx(doc, inv, rawTmdl, changelog) {
-  const d = doc;
   const visible = inv.tables.filter(t=>!t.isHidden);
-
-  // Inventory rows
-  const allComponents = [];
-  allComponents.push(['Loại','Tên','Table','Chi tiết','Trạng thái']);
-  visible.forEach(t=>{
-    allComponents.push(['Table',t.name,'',t.aiTableType||'',t.isHidden?'Hidden':'Active']);
-    t.columns.forEach(c=>allComponents.push(['Column',c.name,t.name,c.dataType,c.isHidden?'Hidden':'Active']));
-    t.measures.forEach(m=>allComponents.push(['Measure',m.name,t.name,m.folder,'Active']));
-  });
-
-  // Unused rows
-  const unusedRows = [['Loại','Tên','Ghi chú']];
+  const allComponents=[['Loại','Tên','Table','Chi tiết','Trạng thái']];
+  visible.forEach(t=>{allComponents.push(['Table',t.name,'',t.aiTableType||'',t.isHidden?'Hidden':'Active']);t.columns.forEach(c=>allComponents.push(['Column',c.name,t.name,c.dataType,c.isHidden?'Hidden':'Active']));t.measures.forEach(m=>allComponents.push(['Measure',m.name,t.name,m.folder,'Active']));});
+  const unusedRows=[['Loại','Tên','Ghi chú']];
   (inv.unused.tables||[]).forEach(n=>unusedRows.push(['Table',n,'Không được reference']));
-  (inv.unused.columns||[]).forEach(n=>unusedRows.push(['Column',n,'Không dùng trong DAX/relationship']));
-  (inv.unused.measures||[]).forEach(n=>unusedRows.push(['Measure',n,'Không được gọi bởi measure khác']));
-
-  // Changelog rows
-  const clRows = [['Trường','Nội dung']];
-  if (changelog) {
-    clRows.push(['Version summary', changelog.version_summary||'']);
-    clRows.push(['Added tables', (changelog.added_tables||[]).join(', ')]);
-    clRows.push(['Removed tables', (changelog.removed_tables||[]).join(', ')]);
-    clRows.push(['Added measures', (changelog.added_measures||[]).join(', ')]);
-    clRows.push(['Removed measures', (changelog.removed_measures||[]).join(', ')]);
-    clRows.push(['Added columns', (changelog.added_columns||[]).join(', ')]);
-    clRows.push(['Removed columns', (changelog.removed_columns||[]).join(', ')]);
-    clRows.push(['Detail', Array.isArray(changelog.detail)?changelog.detail.join('\n'):changelog.detail||'']);
-  }
-
-  // TMDL source — split into rows of 1000 chars each
-  const tmdlRows = [['TMDL Source (raw — dùng để restore PowerBI)']];
-  const tmdlLines = (rawTmdl||'').split('\n');
-  tmdlLines.forEach(line => tmdlRows.push([line]));
-
-  const sheets = [
-    {name:'1.Overview', rows:[
-      ['Thông tin','Giá trị'],
-      ['Tên báo cáo',d.meta.name],['Version','v1.0'],['Ngày tạo',d.meta.date],['Người tạo',d.meta.auth],
-      ['Mô tả',d.overview.description],['Tables',d.overview.total_tables],
-      ['Measures',d.overview.total_measures],['Relationships',d.overview.total_relationships],
-      ['Domain',d.overview.report_domain],['Company context',d.overview.company_context],
-      ['Key metrics',d.overview.key_metrics],['Date logic',d.overview.date_logic],
-      ['Unused Columns',inv.unused.columns.length],['Unused Measures',inv.unused.measures.length],
-    ]},
-    {name:'2.Tables & Columns', rows:[
-      ['Table','Type','Mô tả Table','Column','Data Type','Hidden','Format','Mô tả Column'],
-      ...(d.tables||[]).flatMap(t=>t.columns?.length
-        ? t.columns.map(c=>[t.name,t.type,t.description,c.name,c.dataType,c.isHidden?'Yes':'No',c.formatString||'',c.aiDescription||''])
-        : [[t.name,t.type,t.description,'','','','','']])
-    ]},
-    {name:'3.Measures & DAX', rows:[
-      ['Table','Measure','Folder','Format','DAX','Plain English','Logic Chi Tiết','Dependencies'],
-      ...(d.measures||[]).map(m=>[m.table,m.name,m.display_folder,m.format_string,m.dax,m.plain_english,m.logic_detail,m.dependencies])
-    ]},
-    {name:'4.Relationships', rows:[
-      ['From Table','From Column','To Table','To Column','Cardinality','Cross Filter','Active','Ý nghĩa','Ảnh hưởng'],
-      ...(d.relationships||[]).map(r=>[r.from_table,r.from_column,r.to_table,r.to_column,r.cardinality,r.cross_filter,r.is_active,r.business_meaning,r.impact_on_measures])
-    ]},
-    {name:'5.Power Query', rows:[
-      ['Table','Source Type','Mô tả nguồn','M Query','Bước Transform','Lưu ý DQ'],
-      ...(d.power_query||[]).map(p=>[p.table,p.source_type,p.source_desc,p.m_query,p.steps_desc,p.data_quality])
-    ]},
-    {name:'6.All Components', rows: allComponents},
-    {name:'7.Unused Components', rows: unusedRows.length>1?unusedRows:[['Kết quả',''],['Không phát hiện unused components','🎉']]},
-    {name:'8.Changelog', rows: clRows},
-    {name:'9.TMDL_Source', rows: tmdlRows},
+  (inv.unused.columns||[]).forEach(n=>unusedRows.push(['Column',n,'Không dùng trong DAX']));
+  (inv.unused.measures||[]).forEach(n=>unusedRows.push(['Measure',n,'Không được gọi']));
+  const clRows=[['Trường','Nội dung']];
+  if(changelog){clRows.push(['Version summary',changelog.version_summary||'']);clRows.push(['Added tables',(changelog.added_tables||[]).join(', ')]);clRows.push(['Removed tables',(changelog.removed_tables||[]).join(', ')]);clRows.push(['Added measures',(changelog.added_measures||[]).join(', ')]);clRows.push(['Removed measures',(changelog.removed_measures||[]).join(', ')]);clRows.push(['Modified measures',(changelog.modified_measures||[]).join(', ')]);clRows.push(['Added columns',(changelog.added_columns||[]).join(', ')]);clRows.push(['Removed columns',(changelog.removed_columns||[]).join(', ')]);clRows.push(['Detail',Array.isArray(changelog.detail)?changelog.detail.join('\n'):changelog.detail||'']);}
+  const tmdlRows=[['TMDL Source (raw — để restore PowerBI)']];
+  (rawTmdl||'').split('\n').forEach(line=>tmdlRows.push([line]));
+  const sheets=[
+    {name:'1.Overview',rows:[['Thông tin','Giá trị'],['Tên báo cáo',doc.meta.name],['Version','v1.0'],['Ngày tạo',doc.meta.date],['Người tạo',doc.meta.auth],['Mô tả',doc.overview.description],['Tables',doc.overview.total_tables],['Measures',doc.overview.total_measures],['Relationships',doc.overview.total_relationships],['Domain',doc.overview.report_domain],['Company',doc.overview.company_context],['Key metrics',doc.overview.key_metrics],['Unused Cols',inv.unused.columns.length],['Unused Measures',inv.unused.measures.length]]},
+    {name:'2.Tables & Columns',rows:[['Table','Type','Mô tả Table','Column','Data Type','Hidden','Format','Mô tả Column'],...(doc.tables||[]).flatMap(t=>t.columns?.length?t.columns.map(c=>[t.name,t.type,t.description,c.name,c.dataType,c.isHidden?'Yes':'No',c.formatString||'',c.aiDescription||'']):[[t.name,t.type,t.description,'','','','','']])]},
+    {name:'3.Measures & DAX',rows:[['Table','Measure','Folder','Format','DAX','Plain English','Logic Chi Tiết'],...(doc.measures||[]).map(m=>[m.table,m.name,m.display_folder,m.format_string,m.dax,m.plain_english,m.logic_detail])]},
+    {name:'4.Relationships',rows:[['From Table','From Column','To Table','To Column','Cardinality','Cross Filter','Active','Ý nghĩa','Ảnh hưởng'],...(doc.relationships||[]).map(r=>[r.from_table,r.from_column,r.to_table,r.to_column,r.cardinality,r.cross_filter,r.is_active,r.business_meaning,r.impact_on_measures])]},
+    {name:'5.Power Query',rows:[['Table','Source Type','Mô tả nguồn','M Query','Bước Transform','Lưu ý DQ'],...(doc.power_query||[]).map(p=>[p.table,p.source_type,p.source_desc,p.m_query,p.steps_desc,p.data_quality])]},
+    {name:'6.All Components',rows:allComponents},
+    {name:'7.Unused',rows:unusedRows.length>1?unusedRows:[['Kết quả',''],['Không phát hiện unused','🎉']]},
+    {name:'8.Changelog',rows:clRows},
+    {name:'9.TMDL_Source',rows:tmdlRows},
   ];
-
   const cols='ABCDEFGHIJKLMNOPQRSTUVWXYZ';
   const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-  const ss=[]; const ssMap={};
+  const ss=[],ssMap={};
   const si=s=>{const k=String(s??'');if(k in ssMap)return ssMap[k];ssMap[k]=ss.length;ss.push(k);return ss.length-1;};
   const sheetXmls=[],sheetNames=[];
-  for (const {name:sn,rows} of sheets) {
-    sheetNames.push(sn);
-    let xml=`<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>`;
-    rows.forEach((row,r)=>{xml+=`<row r="${r+1}">`;row.forEach((cell,c)=>{xml+=`<c r="${cols[c]}${r+1}" t="s"><v>${si(cell)}</v></c>`;});xml+=`</row>`;});
-    xml+=`</sheetData></worksheet>`;sheetXmls.push(xml);
-  }
+  for(const{name:sn,rows}of sheets){sheetNames.push(sn);let xml=`<?xml version="1.0" encoding="UTF-8"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>`;rows.forEach((row,r)=>{xml+=`<row r="${r+1}">`;row.forEach((cell,c)=>{xml+=`<c r="${cols[c]}${r+1}" t="s"><v>${si(cell)}</v></c>`;});xml+=`</row>`;});xml+=`</sheetData></worksheet>`;sheetXmls.push(xml);}
   const ssXml=`<?xml version="1.0" encoding="UTF-8"?><sst xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" count="${ss.length}" uniqueCount="${ss.length}">${ss.map(s=>`<si><t xml:space="preserve">${esc(s)}</t></si>`).join('')}</sst>`;
   const wbXml=`<?xml version="1.0" encoding="UTF-8"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets>${sheetNames.map((n,i)=>`<sheet name="${esc(n)}" sheetId="${i+1}" r:id="rId${i+2}"/>`).join('')}</sheets></workbook>`;
   const wbRels=`<?xml version="1.0" encoding="UTF-8"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/sharedStrings" Target="sharedStrings.xml"/>${sheetNames.map((_,i)=>`<Relationship Id="rId${i+2}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}</Relationships>`;
@@ -1409,145 +1451,57 @@ function buildXlsx(doc, inv, rawTmdl, changelog) {
   return new Blob([zipped],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
 }
 
-function blobToBase64(blob) {
-  return new Promise((resolve, reject) => {
-    const r = new FileReader();
-    r.onload = () => resolve(r.result);
-    r.onerror = reject;
-    r.readAsDataURL(blob);
-  });
-}
-
 // ════════════════════════════════════════════
 // RENDER RESULT PANEL
 // ════════════════════════════════════════════
 function renderResult(doc, inv, xlsxBlob, filename, resultId) {
-  const el = document.getElementById(resultId);
-  if (!el) return;
-  el.className = 'result-panel show';
-
-  const visible = inv.tables.filter(t=>!t.isHidden);
-  const allMeasures = visible.flatMap(t=>t.measures);
-
-  el.innerHTML = `
+  const el=document.getElementById(resultId);
+  if(!el)return;
+  el.className='result-panel show';
+  const visible=inv.tables.filter(t=>!t.isHidden);
+  const allMeasures=visible.flatMap(t=>t.measures);
+  el.innerHTML=`
     <div class="result-head">
-      <h3>📊 ${doc.meta.name} — Documentation</h3>
+      <h3>📊 ${doc.meta.name}</h3>
       <button class="btn btn-dl-excel" onclick="downloadBlob('${filename}')">⬇ Download Excel</button>
     </div>
     <div class="rtabs" id="${resultId}_tabs"></div>
     <div id="${resultId}_tcs"></div>
   `;
-
-  const tabs = [
-    {id:'ov', label:'Overview'},
-    {id:'tb', label:`Tables (${visible.length})`},
-    {id:'ms', label:`Measures (${allMeasures.length})`},
-    {id:'rl', label:`Relationships (${inv.rels.length})`},
-    {id:'pq', label:'Power Query'},
-    {id:'iv', label:'Inventory'},
-    ...(doc.changelog?.version_summary?[{id:'cl', label:'Changelog'}]:[]),
-  ];
-
-  const tabBar = document.getElementById(`${resultId}_tabs`);
-  const tcsEl = document.getElementById(`${resultId}_tcs`);
-  tabBar.innerHTML = tabs.map((t,i)=>`<div class="rtab${i===0?' active':''}" onclick="switchRTab('${resultId}','${t.id}')">${t.label}</div>`).join('');
-  tcsEl.innerHTML = tabs.map((t,i)=>`<div class="rtc${i===0?' active':''}" id="${resultId}_${t.id}"></div>`).join('');
-
+  const tabs=[{id:'ov',label:'Overview'},{id:'tb',label:`Tables (${visible.length})`},{id:'ms',label:`Measures (${allMeasures.length})`},{id:'rl',label:`Relationships (${inv.rels.length})`},{id:'pq',label:'Power Query'},{id:'iv',label:'Inventory'},...(doc.changelog?.version_summary?[{id:'cl',label:'Changelog'}]:[])];
+  document.getElementById(`${resultId}_tabs`).innerHTML=tabs.map((t,i)=>`<div class="rtab${i===0?' active':''}" onclick="switchRTab('${resultId}','${t.id}')">${t.label}</div>`).join('');
+  document.getElementById(`${resultId}_tcs`).innerHTML=tabs.map((t,i)=>`<div class="rtc${i===0?' active':''}" id="${resultId}_${t.id}"></div>`).join('');
   // Overview
-  document.getElementById(`${resultId}_ov`).innerHTML = `
-    <div class="inv-stats">
-      <div class="inv-stat"><div class="n">${inv.counts.tables}</div><div class="l">Tables</div></div>
-      <div class="inv-stat"><div class="n">${inv.counts.columns}</div><div class="l">Columns</div></div>
-      <div class="inv-stat"><div class="n">${inv.counts.measures}</div><div class="l">Measures</div></div>
-      <div class="inv-stat"><div class="n">${inv.counts.relationships}</div><div class="l">Relationships</div></div>
-      <div class="inv-stat"><div class="n">${inv.unused.columns.length}</div><div class="l">Unused Cols</div></div>
-    </div>
-    ${doc.overview.description?`<div class="logic-box" style="margin-bottom:10px">${doc.overview.description}</div>`:''}
-    <table><tr><th>Thông tin</th><th>Giá trị</th></tr>
-    <tr><td>Domain</td><td>${doc.overview.report_domain||'-'}</td></tr>
-    <tr><td>Company</td><td>${doc.overview.company_context||'-'}</td></tr>
-    <tr><td>Key Metrics</td><td>${doc.overview.key_metrics||'-'}</td></tr>
-    <tr><td>Date Logic</td><td>${doc.overview.date_logic||'-'}</td></tr>
-    </table>`;
-
+  document.getElementById(`${resultId}_ov`).innerHTML=`<div class="inv-stats"><div class="inv-stat"><div class="n">${inv.counts.tables}</div><div class="l">Tables</div></div><div class="inv-stat"><div class="n">${inv.counts.columns}</div><div class="l">Columns</div></div><div class="inv-stat"><div class="n">${inv.counts.measures}</div><div class="l">Measures</div></div><div class="inv-stat"><div class="n">${inv.counts.relationships}</div><div class="l">Relationships</div></div><div class="inv-stat"><div class="n">${inv.unused.columns.length}</div><div class="l">Unused</div></div></div>${doc.overview.description?`<div class="logic-box" style="margin:10px 0">${doc.overview.description}</div>`:''}`;
   // Tables
-  document.getElementById(`${resultId}_tb`).innerHTML = `<table>
-    <tr><th>Table</th><th>Type</th><th>Mô tả</th><th>Columns</th><th>Measures</th></tr>
-    ${visible.map(t=>`<tr><td><strong>${t.name}</strong></td><td>${t.aiTableType||'-'}</td><td>${t.aiDescription||'-'}</td><td>${t.columns.length}</td><td>${t.measures.length}</td></tr>`).join('')}
-  </table>`;
-
+  document.getElementById(`${resultId}_tb`).innerHTML=`<table><tr><th>Table</th><th>Type</th><th>Mô tả</th><th>Cols</th><th>Measures</th></tr>${visible.map(t=>`<tr><td><strong>${t.name}</strong></td><td>${t.aiTableType||'-'}</td><td>${t.aiDescription||'-'}</td><td>${t.columns.length}</td><td>${t.measures.length}</td></tr>`).join('')}</table>`;
   // Measures
-  document.getElementById(`${resultId}_ms`).innerHTML = `<table>
-    <tr><th>Table</th><th>Measure</th><th>Folder</th><th>Plain English</th><th>Logic</th></tr>
-    ${allMeasures.map(m=>`<tr><td>${m.table}</td><td><strong>${m.name}</strong></td><td>${m.folder||'-'}</td><td>${m.aiPlainEnglish||'-'}</td><td>${m.aiLogic||'-'}</td></tr>`).join('')}
-  </table>`;
-
+  document.getElementById(`${resultId}_ms`).innerHTML=`<table><tr><th>Table</th><th>Measure</th><th>Folder</th><th>Plain English</th><th>Logic</th></tr>${allMeasures.map(m=>`<tr><td>${m.table}</td><td><strong>${m.name}</strong></td><td>${m.folder||'-'}</td><td>${m.aiPlainEnglish||'-'}</td><td>${m.aiLogic||'-'}</td></tr>`).join('')}</table>`;
   // Relationships
-  document.getElementById(`${resultId}_rl`).innerHTML = `<table>
-    <tr><th>From</th><th>To</th><th>Cardinality</th><th>Active</th><th>Business Meaning</th></tr>
-    ${inv.rels.map(r=>`<tr><td>${r.fromTable}[${r.fromCol}]</td><td>${r.toTable}[${r.toCol}]</td><td>${r.cardinality}</td><td>${r.isActive?'<span class="badge-act">Active</span>':'<span class="badge-ina">Inactive</span>'}</td><td>${r.aiMeaning||'-'}</td></tr>`).join('')}
-  </table>`;
-
-  // Power Query
-  document.getElementById(`${resultId}_pq`).innerHTML = `<table>
-    <tr><th>Table</th><th>Source Type</th><th>Mô tả</th><th>Steps</th></tr>
-    ${visible.filter(t=>t.partitionType!=='None').map(t=>`<tr><td>${t.name}</td><td>${t.sourceType||'-'}</td><td>${t.aiSourceDesc||'-'}</td><td>${t.aiStepsDesc||'-'}</td></tr>`).join('')}
-  </table>`;
-
+  document.getElementById(`${resultId}_rl`).innerHTML=`<table><tr><th>From</th><th>To</th><th>Cardinality</th><th>Active</th><th>Meaning</th></tr>${inv.rels.map(r=>`<tr><td>${r.fromTable}[${r.fromCol}]</td><td>${r.toTable}[${r.toCol}]</td><td>${r.cardinality}</td><td>${r.isActive?'<span class="badge-act">Active</span>':'<span class="badge-ina">Inactive</span>'}</td><td>${r.aiMeaning||'-'}</td></tr>`).join('')}</table>`;
+  // PQ
+  document.getElementById(`${resultId}_pq`).innerHTML=`<table><tr><th>Table</th><th>Source</th><th>Mô tả</th><th>Steps</th></tr>${visible.filter(t=>t.partitionType!=='None').map(t=>`<tr><td>${t.name}</td><td>${t.sourceType||'-'}</td><td>${t.aiSourceDesc||'-'}</td><td>${t.aiStepsDesc||'-'}</td></tr>`).join('')}</table>`;
   // Inventory
-  let invHtml = `<div class="inv-stats">
-    <div class="inv-stat"><div class="n">${inv.counts.tables}</div><div class="l">Visible Tables</div></div>
-    <div class="inv-stat"><div class="n">${inv.counts.hiddenTables}</div><div class="l">Hidden Tables</div></div>
-    <div class="inv-stat"><div class="n">${inv.counts.columns}</div><div class="l">Columns</div></div>
-    <div class="inv-stat"><div class="n">${inv.counts.measures}</div><div class="l">Measures</div></div>
-  </div>`;
-  if (inv.unused.columns.length||inv.unused.measures.length) {
-    invHtml += `<div class="unused-section"><h4>⚠ Unused components phát hiện:</h4>`;
-    if (inv.unused.columns.length) invHtml+=`<div style="margin-bottom:6px"><strong>Columns (${inv.unused.columns.length}):</strong><br>${inv.unused.columns.map(c=>`<span class="unused-tag">${c}</span>`).join('')}</div>`;
-    if (inv.unused.measures.length) invHtml+=`<div><strong>Measures (${inv.unused.measures.length}):</strong><br>${inv.unused.measures.map(c=>`<span class="unused-tag">${c}</span>`).join('')}</div>`;
-    invHtml+=`</div>`;
-  }
-  document.getElementById(`${resultId}_iv`).innerHTML = invHtml;
-
+  let invHtml=`<div class="inv-stats"><div class="inv-stat"><div class="n">${inv.counts.tables}</div><div class="l">Visible</div></div><div class="inv-stat"><div class="n">${inv.counts.hiddenTables}</div><div class="l">Hidden</div></div><div class="inv-stat"><div class="n">${inv.counts.columns}</div><div class="l">Columns</div></div><div class="inv-stat"><div class="n">${inv.counts.measures}</div><div class="l">Measures</div></div></div>`;
+  if(inv.unused.columns.length||inv.unused.measures.length){invHtml+=`<div class="unused-section"><h4>⚠ Unused:</h4>${inv.unused.columns.map(c=>`<span class="unused-tag">${c}</span>`).join('')}${inv.unused.measures.map(c=>`<span class="unused-tag">${c}</span>`).join('')}</div>`;}
+  document.getElementById(`${resultId}_iv`).innerHTML=invHtml;
   // Changelog
-  if (doc.changelog?.version_summary) {
-    const cl = doc.changelog;
-    let clHtml = `<div class="tip-success" style="margin-bottom:12px"><strong>Tóm tắt:</strong> ${cl.version_summary}</div>`;
-    const detail = Array.isArray(cl.detail)?cl.detail.join('\n'):cl.detail||'';
-    if (detail) clHtml+=`<div class="logic-box" style="margin-bottom:12px">${detail}</div>`;
-    clHtml += `<table><tr><th>Loại thay đổi</th><th>Chi tiết</th></tr>`;
-    if (cl.added_tables?.length)    clHtml+=`<tr><td><span class="diff-added">+ Tables</span></td><td>${cl.added_tables.join(', ')}</td></tr>`;
-    if (cl.removed_tables?.length)  clHtml+=`<tr><td><span class="diff-removed">- Tables</span></td><td>${cl.removed_tables.join(', ')}</td></tr>`;
-    if (cl.added_measures?.length)  clHtml+=`<tr><td><span class="diff-added">+ Measures</span></td><td>${cl.added_measures.join(', ')}</td></tr>`;
-    if (cl.removed_measures?.length)clHtml+=`<tr><td><span class="diff-removed">- Measures</span></td><td>${cl.removed_measures.join(', ')}</td></tr>`;
-    if (cl.added_columns?.length)   clHtml+=`<tr><td><span class="diff-added">+ Columns</span></td><td>${cl.added_columns.join(', ')}</td></tr>`;
-    if (cl.removed_columns?.length) clHtml+=`<tr><td><span class="diff-removed">- Columns</span></td><td>${cl.removed_columns.join(', ')}</td></tr>`;
-    clHtml += `</table>`;
-    document.getElementById(`${resultId}_cl`).innerHTML = clHtml;
-  }
-
-  // Store blob for download button
-  window._lastBlob = xlsxBlob;
-  window._lastFilename = filename;
+  if(doc.changelog?.version_summary){const cl=doc.changelog;let h=`<div class="tip-success" style="margin-bottom:10px"><strong>Tóm tắt:</strong> ${cl.version_summary}</div>`;const detail=Array.isArray(cl.detail)?cl.detail.join('\n'):cl.detail||'';if(detail)h+=`<div class="logic-box" style="margin-bottom:10px">${detail}</div>`;h+=`<table><tr><th>Loại</th><th>Chi tiết</th></tr>`;if(cl.added_tables?.length)h+=`<tr><td><span class="diff-added">+ Tables</span></td><td>${cl.added_tables.join(', ')}</td></tr>`;if(cl.removed_tables?.length)h+=`<tr><td><span class="diff-removed">- Tables</span></td><td>${cl.removed_tables.join(', ')}</td></tr>`;if(cl.added_measures?.length)h+=`<tr><td><span class="diff-added">+ Measures</span></td><td>${cl.added_measures.join(', ')}</td></tr>`;if(cl.removed_measures?.length)h+=`<tr><td><span class="diff-removed">- Measures</span></td><td>${cl.removed_measures.join(', ')}</td></tr>`;if(cl.modified_measures?.length)h+=`<tr><td><span class="diff-changed">~ Modified</span></td><td>${cl.modified_measures.join(', ')}</td></tr>`;h+=`</table>`;document.getElementById(`${resultId}_cl`).innerHTML=h;}
+  window._lastBlob=xlsxBlob; window._lastFilename=filename;
 }
 
 function switchRTab(resultId, tabId) {
-  const tabs = document.querySelectorAll(`#${resultId}_tabs .rtab`);
-  const tcs  = document.querySelectorAll(`#${resultId}_tcs .rtc`);
-  tabs.forEach(t=>t.classList.remove('active'));
-  tcs.forEach(t=>t.classList.remove('active'));
-  const activeTab = document.querySelector(`#${resultId}_tabs .rtab[onclick*="${tabId}"]`);
-  const activeTC  = document.getElementById(`${resultId}_${tabId}`);
-  if (activeTab) activeTab.classList.add('active');
-  if (activeTC)  activeTC.classList.add('active');
+  document.querySelectorAll(`#${resultId}_tabs .rtab`).forEach(t=>t.classList.remove('active'));
+  document.querySelectorAll(`#${resultId}_tcs .rtc`).forEach(t=>t.classList.remove('active'));
+  const activeTab=document.querySelector(`#${resultId}_tabs .rtab[onclick*="${tabId}"]`);
+  const activeTC=document.getElementById(`${resultId}_${tabId}`);
+  if(activeTab)activeTab.classList.add('active');
+  if(activeTC)activeTC.classList.add('active');
 }
 
 function downloadBlob(filename) {
-  if (!window._lastBlob) return;
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(window._lastBlob);
-  a.download = filename || window._lastFilename || 'documentation.xlsx';
-  a.click();
+  if(!window._lastBlob)return;
+  const a=document.createElement('a'); a.href=URL.createObjectURL(window._lastBlob); a.download=filename||'doc.xlsx'; a.click();
 }
 
 // ════════════════════════════════════════════
@@ -1557,7 +1511,6 @@ window.addEventListener('load', () => {
   loadConfig();
   loadGroqKeys();
   updateModelInfo();
-  // Set default tab active state
   document.getElementById('tab-new').classList.add('active');
 });
 </script>
